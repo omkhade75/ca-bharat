@@ -44,7 +44,7 @@ export default function LandingPage() {
     { num: '05', title: 'Data Validation', desc: 'Cross-document format & missing schedule checks', icon: CheckSquare },
     { num: '06', title: 'Reconciliation', desc: '3-way audit matrix detecting potential mismatches', icon: Scale },
     { num: '07', title: 'Tax Calculation', desc: 'Sample deterministic Old vs New regime optimizer', icon: Cpu },
-    { num: '08', title: 'Human CA Review', desc: 'ICAI-aligned pre-filing checklist & demo sign-off', icon: Award },
+    { num: '08', title: 'Human CA Review', desc: 'Illustrative CA review checklist & demo sign-off', icon: Award },
     { num: '09', title: 'Filing-Ready Output', desc: 'Sample CBDT-compatible ITR JSON schema export', icon: FileCode },
     { num: '10', title: 'Financial Insights', desc: '2-page Visual Eye-Opener & wealth heuristics', icon: LineChart },
   ]

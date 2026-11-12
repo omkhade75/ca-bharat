@@ -529,22 +529,11 @@ export const INITIAL_DOCUMENTS = [
     uploadDate: '2024-06-20T12:05:00Z',
     fileSize: '590 KB',
     pageCount: 1,
-    status: 'Processed',
+    status: 'Uploaded',
     encryptionStatus: 'Simulated In-Memory Sandbox (PAN DEMOP4419E)',
-    extractionConfidence: 98.0,
+    extractionConfidence: 0,
     isCompletePartB: false,
-    extractedData: {
-      totalTdsCredit: 0,
-    },
-    boundingCitations: [
-      {
-        field: 'Draft Statement Status',
-        value: 'Pending Intake Verification',
-        page: 1,
-        line: 'Header Note',
-        bbox: { top: 180, left: 310, width: 150, height: 24 },
-        confidence: 98.5,
-      },
-    ],
+    extractedData: {},
+    boundingCitations: [],
   },
 ]

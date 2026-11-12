@@ -424,13 +424,13 @@ export const INITIAL_TAX_CASES = [
     filingForm: 'ITR-3',
     status: 'Documents Pending',
     assignedCa: 'Rohan Mehta (Junior Associate)',
-    reviewerNotes: 'Taxpayer profile onboarded. Pending document receipt from client.',
+    reviewerNotes: 'Intake pending: Required statutory documents awaiting upload in Document Vault.',
     checklist: {
       panIdentityVerified: true,
       form16Reconciled: false,
       bankAccountValidated: false,
       consentLogged: true,
-      discrepanciesResolved: true,
+      discrepanciesResolved: false,
     },
     incomes: {
       salary: 0,

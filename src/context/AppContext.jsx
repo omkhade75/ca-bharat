@@ -205,24 +205,31 @@ export function AppProvider({ children }) {
       })
     )
 
-    // Add demonstration consent ledger entry
-    setConsents((prev) => [
-      {
-        id: `cst-${Date.now()}`,
+    // Update or add demonstration consent ledger entry
+    setConsents((prev) => {
+      const existingIdx = prev.findIndex((c) => c.clientId === targetClient.id)
+      const newEntry = {
+        id: `cns-${Date.now()}`,
         clientId: targetClient.id,
         clientName: targetClient.name,
         pan: targetClient.pan,
         assessmentYear: activeAy,
-        purpose: 'Comprehensive Tax Return Preparation & Personal Finance Advisory',
-        status: 'Active',
-        grantedAt: new Date().toISOString(),
-        expiresAt: '2026-06-30T23:59:59Z',
-        ipAddress: '103.22.140.12 (Simulated Sandbox IP)',
-        method: 'Digital OTP Authorization (Simulated DPDP)',
-        verifiedIdentity: targetClient.name,
-      },
-      ...prev,
-    ])
+        scope: 'Comprehensive Tax Return Preparation & Personal Finance Advisory',
+        status: 'ACTIVE',
+        timestamp: new Date().toISOString(),
+        validUntil: '2027-03-31T23:59:59Z',
+        ipAddress: '103.22.140.12 (Simulated Sandbox IP, India)',
+        userAgent: navigator.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Demo/1.0',
+        sessionIdHash: `demo-hash-${Math.random().toString(16).substring(2, 10)}${Math.random().toString(16).substring(2, 10)}`,
+        legalDeclaration: `Demonstration consent authorization granted by ${targetClient.name} for Sharma & Co. Chartered Accountants under DPDP guidelines.`,
+      }
+      if (existingIdx >= 0) {
+        const updated = [...prev]
+        updated[existingIdx] = newEntry
+        return updated
+      }
+      return [newEntry, ...prev]
+    })
 
     addAuditLog(
       'CONSENT_GRANTED_DEMO',

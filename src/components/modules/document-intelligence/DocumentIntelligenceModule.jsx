@@ -10,7 +10,8 @@ import {
   Layers,
   RefreshCw,
   Clock,
-  ArrowRight
+  ArrowRight,
+  CheckCircle2
 } from 'lucide-react'
 import { useApp } from '../../../context/AppContext'
 import { formatDate } from '../../../utils/formatters'
@@ -499,25 +500,54 @@ export default function DocumentIntelligenceModule() {
       {/* TAB 2: EXTRACTED DATA REVIEW & EVIDENCE CITATIONS */}
       {activeTab === 'EXTRACTED_REVIEW' && (
         <div className="space-y-6">
-          {/* Missing Information Alerts Banner */}
-          <div className="bg-amber-50/80 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="text-xs">
-              <h4 className="font-bold text-amber-900">
-                Cross-Document Validation Status: 2 Reconciled Findings Flagged
-              </h4>
-              <p className="text-amber-800 mt-0.5 leading-relaxed">
-                Form 16 Part A & B are fully complete. However, Form 26AS Part A1 reports ₹4,200 dividend income and AIS reports ₹46,000 savings interest that were omitted from employer declarations.
-              </p>
+          {/* Missing Information / Status Alerts Banner */}
+          {activeDocBreakdown?.missingCategories?.length > 0 ? (
+            <div className="bg-amber-50/80 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <h4 className="font-bold text-amber-900">
+                  Document Intake Incomplete — {activeDocBreakdown.missingCategories.length} Required Categories Pending
+                </h4>
+                <p className="text-amber-800 mt-0.5 leading-relaxed">
+                  {activeDocBreakdown.missingCategories.some((c) => c.category === 'Form 16')
+                    ? `Form 16 has not been uploaded for ${activeClient?.name}. Only entities from uploaded files are displayed below.`
+                    : `Awaiting upload of: ${activeDocBreakdown.missingCategories.map((c) => c.title).join(', ')}.`}{' '}
+                  Full cross-document reconciliation requires all statutory files in Document Vault.
+                </p>
+              </div>
             </div>
-          </div>
+          ) : activeClientDocs.some((d) => d.status === 'Uploaded' || d.status === 'Processing') ? (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+              <Clock className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <h4 className="font-bold text-blue-900">
+                  AI Extraction Pending — Files Staged in In-Memory Vault
+                </h4>
+                <p className="text-blue-800 mt-0.5 leading-relaxed">
+                  All {activeClientDocs.length} files are staged in the ephemeral memory sandbox for {activeClient?.name}. Click "Run Simulated AI Extraction" above to parse financial tables, bounding coordinates, and Chapter VI-A deductions.
+                </p>
+              </div>
+            </div>
+          ) : activeClientDocs.length > 0 ? (
+            <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4 flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <h4 className="font-bold text-emerald-900">
+                  AI Entity Extraction Verified Across Uploaded Files ✓
+                </h4>
+                <p className="text-emerald-800 mt-0.5 leading-relaxed">
+                  High-fidelity table layout extraction completed for {activeClient?.name} ({activeClient?.pan}). Click any field below to inspect simulated OCR bounding coordinates.
+                </p>
+              </div>
+            </div>
+          ) : null}
 
           {/* Extracted Fields Table with Interactive Coordinate Citations */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">
-                  AI Entity Extraction & Bounding-Box Evidence
+                  AI Entity Extraction & Bounding-Box Evidence — {activeClient?.name}
                 </h3>
                 <p className="text-xs text-slate-500">
                   Click any verified field to inspect the exact simulated OCR document coordinate snippet
@@ -529,52 +559,74 @@ export default function DocumentIntelligenceModule() {
             </div>
 
             <div className="divide-y divide-slate-100">
-              {activeClientDocs.map((doc) => (
-                <div key={doc.id} className="p-4 text-xs">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-teal-600" />
-                      <span className="font-bold text-slate-900">{doc.name}</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">
-                        {doc.category}
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-semibold text-emerald-700">
-                      Average Confidence: {doc.extractionConfidence}%
-                    </span>
-                  </div>
-
-                  {/* Bounding box citations */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                    {doc.boundingCitations?.map((citation, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => setSelectedCitationForInspection({ doc, citation })}
-                        className="p-3 rounded-lg border border-slate-200 bg-slate-50/60 hover:bg-teal-50/50 hover:border-teal-300 transition-all cursor-pointer flex flex-col justify-between group"
-                      >
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 group-hover:text-teal-700">
-                              Page {citation.page} • {citation.line}
-                            </span>
-                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-                              {citation.confidence}%
-                            </span>
-                          </div>
-                          <p className="font-semibold text-slate-800">{citation.field}</p>
-                        </div>
-
-                        <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between">
-                          <span className="text-sm font-bold text-slate-900">{citation.value}</span>
-                          <span className="text-[11px] text-teal-600 font-semibold group-hover:underline flex items-center gap-0.5">
-                            View Snippet <ArrowRight className="w-3 h-3" />
+              {activeClientDocs.length === 0 ? (
+                <div className="p-8 text-center text-slate-500">
+                  <FileText className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                  <p className="font-bold text-slate-800">No Documents Uploaded</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Upload files in Document Vault to extract financial entities for {activeClient?.name}.
+                  </p>
+                </div>
+              ) : (
+                activeClientDocs.map((doc) => {
+                  const isProcessed = doc.status === 'Processed'
+                  const hasCitations = doc.boundingCitations && doc.boundingCitations.length > 0
+                  return (
+                    <div key={doc.id} className="p-4 text-xs">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-teal-600" />
+                          <span className="font-bold text-slate-900">{doc.name}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">
+                            {doc.category}
                           </span>
                         </div>
+                        <span className={`text-[11px] font-semibold ${isProcessed ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {isProcessed
+                            ? `Average Confidence: ${doc.extractionConfidence || 98.4}%`
+                            : 'Status: Staged (Pending Extraction)'}
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+
+                      {/* Bounding box citations */}
+                      {isProcessed && hasCitations ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                          {doc.boundingCitations.map((citation, idx) => (
+                            <div
+                              key={idx}
+                              onClick={() => setSelectedCitationForInspection({ doc, citation })}
+                              className="p-3 rounded-lg border border-slate-200 bg-slate-50/60 hover:bg-teal-50/50 hover:border-teal-300 transition-all cursor-pointer flex flex-col justify-between group"
+                            >
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 group-hover:text-teal-700">
+                                    Page {citation.page} • {citation.line}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                    {citation.confidence}%
+                                  </span>
+                                </div>
+                                <p className="font-semibold text-slate-800">{citation.field}</p>
+                              </div>
+
+                              <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between">
+                                <span className="text-sm font-bold text-slate-900">{citation.value}</span>
+                                <span className="text-[11px] text-teal-600 font-semibold group-hover:underline flex items-center gap-0.5">
+                                  View Snippet <ArrowRight className="w-3 h-3" />
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-slate-500 italic text-[11px]">
+                          Pending AI extraction. Click "Run Simulated AI Extraction" in Document Vault to parse coordinate citations.
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              )}
             </div>
           </div>
         </div>
@@ -583,31 +635,71 @@ export default function DocumentIntelligenceModule() {
       {/* TAB 3: OCR PIPELINE AUDIT LOG */}
       {activeTab === 'HISTORY' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5">
-          <h3 className="text-sm font-bold text-slate-900 mb-1">OCR & In-Memory Pipeline Execution History</h3>
-          <p className="text-xs text-slate-500 mb-4">Cryptographic proof of zero disk leakage and field coordinate extraction</p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 mb-0.5">
+                OCR & In-Memory Pipeline Execution History — {activeClient?.name}
+              </h3>
+              <p className="text-xs text-slate-500">
+                Cryptographic proof of zero disk leakage and field coordinate extraction for {activeClient?.pan}
+              </p>
+            </div>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-slate-100 text-slate-700">
+              {activeClientDocs.length} Document(s) in Vault
+            </span>
+          </div>
 
           <div className="space-y-3 text-xs">
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-start justify-between">
-              <div>
-                <span className="font-bold text-slate-800">In-Memory Processing: Form16_PartAB.pdf</span>
-                <p className="text-slate-600 mt-0.5">Passcode derived from client PAN ({activeClient?.pan}). File parsed in simulated in-memory buffer.</p>
-                <span className="text-[10px] font-mono text-slate-400">Duration: 420ms • Memory Buffer: 1.4 MB • Zero Plaintext Disk Write Demo</span>
+            {activeClientDocs.length === 0 ? (
+              <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-lg border border-slate-200">
+                <Clock className="w-6 h-6 text-slate-400 mx-auto mb-1.5" />
+                <p className="font-semibold text-slate-700">No Extraction Events Logged</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Upload documents in Document Vault to initiate in-memory OCR parsing for {activeClient?.name}.
+                </p>
               </div>
-              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                SUCCESS ✓
-              </span>
-            </div>
-
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-start justify-between">
-              <div>
-                <span className="font-bold text-slate-800">Table Extraction & Cross-Check: Form 26AS vs AIS</span>
-                <p className="text-slate-600 mt-0.5">Matched TDS challans against OLTAS records. Flagged ₹46,000 SFT-005 bank interest discrepancy.</p>
-                <span className="text-[10px] font-mono text-slate-400">Duration: 610ms • Discrepancies Flagged: 2</span>
-              </div>
-              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                SUCCESS ✓
-              </span>
-            </div>
+            ) : (
+              activeClientDocs.map((doc) => {
+                const isProcessed = doc.status === 'Processed'
+                return (
+                  <div
+                    key={doc.id}
+                    className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-start justify-between gap-2"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-800">
+                          {isProcessed ? 'In-Memory Processing' : 'Staged in Vault'}: {doc.name}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 font-semibold">
+                          {doc.category}
+                        </span>
+                      </div>
+                      <p className="text-slate-600 mt-1">
+                        {isProcessed
+                          ? `Passcode derived from client PAN (${activeClient?.pan}). Decrypted in ephemeral RAM sandbox and parsed with ${doc.extractionConfidence || 98.4}% confidence.`
+                          : `Uploaded to in-memory vault. Staged for OCR pipeline batch execution. (Zero disk write).`}
+                      </p>
+                      <div className="text-[10px] font-mono text-slate-400 mt-1 flex flex-wrap gap-2">
+                        <span>Size: {doc.fileSize}</span>
+                        <span>• Pages: {doc.pageCount}</span>
+                        <span>• Status: {doc.status}</span>
+                        {isProcessed && <span>• Memory Buffer: Ephemeral RAM</span>}
+                      </div>
+                    </div>
+                    <span
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded border shrink-0 ${
+                        isProcessed
+                          ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                          : 'text-amber-700 bg-amber-50 border-amber-200'
+                      }`}
+                    >
+                      {isProcessed ? 'SUCCESS ✓' : 'AWAITING EXTRACTION'}
+                    </span>
+                  </div>
+                )
+              })
+            )}
           </div>
         </div>
       )}

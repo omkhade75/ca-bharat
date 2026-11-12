@@ -42,9 +42,7 @@ export default function TaxReconciliationModule() {
   const [isItrJsonOpen, setIsItrJsonOpen] = useState(false)
   const [isClarificationOpen, setIsClarificationOpen] = useState(false)
   const [clarificationReason, setClarificationReason] = useState('')
-  const [caApprovalNotes, setCaApprovalNotes] = useState(
-    'Verified against TRACES 26AS, AIS SFT records, and Form 16 Part A+B. TDS credit validated in OLTAS.'
-  )
+  const [caApprovalNotes, setCaApprovalNotes] = useState('')
   const [copiedJson, setCopiedJson] = useState(false)
 
   // Incomplete intake detection for Requirement 3 & 4
@@ -332,22 +330,26 @@ export default function TaxReconciliationModule() {
       {/* TAB 1: 3-WAY CROSS RECONCILIATION VIEW */}
       {activeTab === 'RECONCILIATION' && (
         <div className="space-y-6">
-          {/* Summary Banner / Missing Documents Warning */}
-          {isIncomplete ? (
+          {/* Summary Banner / Missing Documents Warning / Unextracted Notice */}
+          {isIncomplete || !activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0 ? (
             <div className="bg-amber-50 border border-amber-300 rounded-xl p-5 shadow-xs space-y-3">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div>
                   <h4 className="text-sm font-bold text-amber-900">
-                    Pending Document Intake — Reconciliation Not Possible
+                    {isIncomplete
+                      ? 'Pending Document Intake — Reconciliation Not Possible'
+                      : 'AI Extraction Pending — Reconciliation Matrix Not Generated'}
                   </h4>
                   <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-                    Taxpayer <span className="font-semibold">{activeClient?.name}</span> ({activeClient?.pan}) has uploaded only {activeClientDocs.length} of {activeClient?.docsRequired || 4} expected document categories. Complete 3-way cross-referencing between Form 16, TRACES 26AS, and AIS requires all statutory documents to be uploaded and parsed in the Document Vault.
+                    {isIncomplete
+                      ? `Taxpayer ${activeClient?.name} (${activeClient?.pan}) has uploaded only ${activeClientDocs.length} of ${activeClient?.docsRequired || 4} expected document categories. Complete 3-way cross-referencing between Form 16, TRACES 26AS, and AIS requires all statutory documents to be uploaded and parsed in the Document Vault.`
+                      : `Documents are uploaded for ${activeClient?.name}, but simulated AI extraction has not been executed yet. Run simulated extraction in Document Vault to generate the 3-way reconciliation matrix.`}
                   </p>
                 </div>
               </div>
 
-              {activeDocBreakdown?.missingCategories?.length > 0 && (
+              {isIncomplete && activeDocBreakdown?.missingCategories?.length > 0 && (
                 <div className="bg-white rounded-lg p-3 border border-amber-200">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-2">
                     Missing Document Categories Required for 3-Way Cross-Audit:
@@ -370,7 +372,11 @@ export default function TaxReconciliationModule() {
                   className="px-4 py-2 text-xs font-bold rounded-lg bg-teal-600 hover:bg-teal-700 text-white flex items-center gap-1.5 shadow-xs cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5" />
-                  <span>Go to Document Vault to Upload Missing Documents</span>
+                  <span>
+                    {isIncomplete
+                      ? 'Go to Document Vault to Upload Missing Documents'
+                      : 'Go to Document Vault to Run AI Extraction'}
+                  </span>
                 </button>
               </div>
             </div>
@@ -775,10 +781,10 @@ export default function TaxReconciliationModule() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">
-                  Statutory CA Pre-Filing Checklist (ICAI Professional Standards)
+                  Illustrative CA Review Checklist
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Mandatory verification criteria before generating government filing schema
+                  Illustrative quality review criteria before generating demonstration filing pack
                 </p>
               </div>
               <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono">
@@ -839,7 +845,7 @@ export default function TaxReconciliationModule() {
 
               <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  {pendingDiscrepancies.length === 0 && !isIncomplete ? (
+                  {pendingDiscrepancies.length === 0 && !isIncomplete && activeTaxCase?.reconciliationItems?.length > 0 ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   ) : (
                     <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
@@ -850,11 +856,13 @@ export default function TaxReconciliationModule() {
                 </div>
                 <span
                   className={`font-bold text-[11px] ${
-                    pendingDiscrepancies.length === 0 && !isIncomplete ? 'text-emerald-700' : 'text-amber-700'
+                    pendingDiscrepancies.length === 0 && !isIncomplete && activeTaxCase?.reconciliationItems?.length > 0 ? 'text-emerald-700' : 'text-amber-700'
                   }`}
                 >
                   {isIncomplete
                     ? 'AWAITING DOCUMENTS'
+                    : !activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0
+                    ? 'AWAITING RECONCILIATION'
                     : pendingDiscrepancies.length === 0
                     ? 'RESOLVED ✓'
                     : `${pendingDiscrepancies.length} PENDING`}
@@ -885,8 +893,17 @@ export default function TaxReconciliationModule() {
                       rows={2}
                       value={caApprovalNotes}
                       onChange={(e) => setCaApprovalNotes(e.target.value)}
-                      className="w-full bg-slate-950/70 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-hidden focus:border-blue-500 placeholder:text-slate-500"
-                      placeholder="Add formal certification notes..."
+                      disabled={isIncomplete || pendingDiscrepancies.length > 0 || !activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0}
+                      className="w-full bg-slate-950/70 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-hidden focus:border-blue-500 placeholder:text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      placeholder={
+                        isIncomplete
+                          ? "Intake incomplete — formal verification notes cannot be generated until required documents are uploaded and reconciled."
+                          : !activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0
+                          ? "Reconciliation pending — run 3-way audit before recording sign-off certification notes."
+                          : pendingDiscrepancies.length > 0
+                          ? `Discrepancies pending — resolve ${pendingDiscrepancies.length} reporting variances before sign-off certification.`
+                          : "Enter CA certification notes (e.g. Verified against TRACES 26AS, AIS SFT records, and Form 16 Part A+B)..."
+                      }
                     />
                   </div>
                 )}
@@ -902,11 +919,17 @@ export default function TaxReconciliationModule() {
 
                 <button
                   onClick={handleApproveCase}
-                  disabled={isIncomplete || pendingDiscrepancies.length > 0 || activeTaxCase?.approval?.isApproved}
+                  disabled={
+                    isIncomplete ||
+                    pendingDiscrepancies.length > 0 ||
+                    activeTaxCase?.approval?.isApproved ||
+                    !activeTaxCase?.reconciliationItems ||
+                    activeTaxCase.reconciliationItems.length === 0
+                  }
                   className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all shadow-md flex items-center gap-1.5 active:scale-98 ${
                     activeTaxCase?.approval?.isApproved
                       ? 'bg-emerald-600 text-white cursor-default'
-                      : isIncomplete
+                      : isIncomplete || !activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0
                       ? 'bg-slate-700 text-slate-400 cursor-not-allowed border border-slate-600'
                       : pendingDiscrepancies.length > 0
                       ? 'bg-amber-600/80 text-white cursor-not-allowed'
@@ -919,6 +942,8 @@ export default function TaxReconciliationModule() {
                       ? 'Approved by CA (Simulated Prototype Action) ✓'
                       : isIncomplete
                       ? 'Intake Incomplete — Upload Missing Documents First'
+                      : !activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0
+                      ? 'Reconciliation Pending — Complete 3-Way Audit First'
                       : pendingDiscrepancies.length > 0
                       ? `Resolve ${pendingDiscrepancies.length} Discrepancies Before Sign-Off`
                       : 'Simulate Sign-Off & Generate Filing Pack'}

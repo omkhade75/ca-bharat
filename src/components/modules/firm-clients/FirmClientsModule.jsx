@@ -465,7 +465,7 @@ export default function FirmClientsModule() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs px-2.5 py-1 rounded bg-teal-100 text-teal-800 font-semibold border border-teal-200">
-                Strict Multi-Tenant Isolation Active
+                Single-Firm Demo — Role & Permission Model
               </span>
             </div>
           </div>
