@@ -11,7 +11,9 @@ import {
   Download,
   ShieldCheck,
   Send,
-  Copy
+  Copy,
+  Clock,
+  Upload
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { useApp } from '../../../context/AppContext'
@@ -25,9 +27,14 @@ export default function TaxReconciliationModule() {
   const {
     activeClient,
     activeTaxCase,
+    activeClientDocs,
+    activeWorkflowStage,
+    activeWorkflowMeta,
+    activeDocBreakdown,
     acceptDiscrepancy,
     approveTaxCase,
     requestCorrection,
+    recordReportGenerated,
     activeAy,
   } = useApp()
 
@@ -40,14 +47,24 @@ export default function TaxReconciliationModule() {
   )
   const [copiedJson, setCopiedJson] = useState(false)
 
-  // Compute live tax comparison using deterministic engine
-  const taxComparison = activeTaxCase
-    ? compareTaxRegimes(
-        activeTaxCase.incomes,
-        activeTaxCase.deductions,
-        activeTaxCase.taxesPaid?.totalTds || 180420
-      )
-    : null
+  // Incomplete intake detection for Requirement 3 & 4
+  const isIncomplete =
+    activeWorkflowStage === 'ONBOARDING' ||
+    activeWorkflowStage === 'CONSENT_PENDING' ||
+    activeWorkflowStage === 'DOCUMENTS_PENDING' ||
+    (activeClientDocs.length < (activeClient?.docsRequired || 4) &&
+      (!activeTaxCase?.incomes?.salary && !activeTaxCase?.incomes?.otherSources && !activeTaxCase?.reconciliationItems?.length))
+
+  // Compute live tax comparison using deterministic engine with safe TDS extraction (no false 180420 fallback!)
+  const actualTds = activeTaxCase?.taxesPaid?.totalTds ?? 0
+  const taxComparison =
+    activeTaxCase && !isIncomplete
+      ? compareTaxRegimes(
+          activeTaxCase.incomes,
+          activeTaxCase.deductions,
+          actualTds
+        )
+      : null
 
   const pendingDiscrepancies =
     activeTaxCase?.reconciliationItems?.filter((i) => !i.isAccepted && i.status.includes('MISMATCH')) || []
@@ -129,6 +146,7 @@ export default function TaxReconciliationModule() {
     : '{}'
 
   const downloadJsonFile = () => {
+    recordReportGenerated(activeTaxCase?.id || activeTaxCase?.caseId)
     const blob = new Blob([generatedItrJson], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -141,6 +159,7 @@ export default function TaxReconciliationModule() {
   }
 
   const copyJsonToClipboard = () => {
+    recordReportGenerated(activeTaxCase?.id || activeTaxCase?.caseId)
     navigator.clipboard.writeText(generatedItrJson)
     setCopiedJson(true)
     setTimeout(() => setCopiedJson(false), 2000)
@@ -165,17 +184,13 @@ export default function TaxReconciliationModule() {
         {/* Case Status Pill */}
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <span className="text-[10px] uppercase font-semibold text-slate-400 block">Case Status</span>
+            <span className="text-[10px] uppercase font-semibold text-slate-400 block">Case Workflow Stage</span>
             <span
-              className={`text-xs font-bold px-2.5 py-1 rounded-full inline-block ${
-                activeTaxCase?.status === 'CA Approved'
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                  : pendingDiscrepancies.length > 0
-                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                  : 'bg-blue-100 text-blue-800 border border-blue-200'
+              className={`text-xs font-bold px-2.5 py-1 rounded-full inline-block border ${
+                activeWorkflowMeta?.colorClasses || 'bg-slate-100 text-slate-700 border-slate-200'
               }`}
             >
-              {activeTaxCase?.status || 'Active'}
+              {activeWorkflowMeta?.label || activeTaxCase?.status || 'Active'}
             </span>
           </div>
 
@@ -218,25 +233,53 @@ export default function TaxReconciliationModule() {
         <div>
           <span className="text-[10px] uppercase font-semibold text-slate-400 block">Return Form</span>
           <span className="text-sm font-bold text-blue-300 font-mono">
-            {activeTaxCase?.filingForm || 'ITR-2'}
+            {activeTaxCase?.filingForm || 'ITR-1'}
           </span>
-          <p className="text-[11px] text-slate-400">Upgraded via AIS Capital Gains</p>
+          <p className="text-[11px] text-slate-400">
+            {activeTaxCase?.filingForm === 'ITR-2'
+              ? 'ITR-2 (Capital Gains Schedule)'
+              : activeTaxCase?.filingForm === 'ITR-4'
+              ? 'ITR-4 (Presumptive Sec 44ADA)'
+              : activeTaxCase?.filingForm === 'ITR-3'
+              ? 'ITR-3 (Business & Professional)'
+              : 'ITR-1 (Salaried Return)'}
+          </p>
         </div>
 
         <div>
           <span className="text-[10px] uppercase font-semibold text-slate-400 block">Optimal Regime</span>
-          <span className="text-sm font-bold text-emerald-400">
-            {taxComparison?.recommendedRegime}
-          </span>
-          <p className="text-[11px] text-slate-400">Saves {formatINR(taxComparison?.taxSaved || 0)}</p>
+          {isIncomplete ? (
+            <>
+              <span className="text-sm font-bold text-amber-400">Pending Intake</span>
+              <p className="text-[11px] text-slate-400">Awaiting Validated Documents</p>
+            </>
+          ) : (
+            <>
+              <span className="text-sm font-bold text-emerald-400">
+                {taxComparison?.recommendedRegime}
+              </span>
+              <p className="text-[11px] text-slate-400">Saves {formatINR(taxComparison?.taxSaved || 0)}</p>
+            </>
+          )}
         </div>
 
         <div>
           <span className="text-[10px] uppercase font-semibold text-slate-400 block">Expected Direct Refund</span>
-          <span className="text-base font-bold text-emerald-400 font-mono">
-            {formatINR(taxComparison?.refundAmount || 0)}
-          </span>
-          <p className="text-[11px] text-slate-400">TDS: {formatINR(taxComparison?.tdsPaid || 0)}</p>
+          {isIncomplete ? (
+            <>
+              <span className="text-base font-bold text-slate-400 font-mono">
+                ₹0 (Preliminary)
+              </span>
+              <p className="text-[11px] text-slate-400">TDS: {formatINR(actualTds)} (Awaiting Ingestion)</p>
+            </>
+          ) : (
+            <>
+              <span className="text-base font-bold text-emerald-400 font-mono">
+                {formatINR(taxComparison?.refundAmount || 0)}
+              </span>
+              <p className="text-[11px] text-slate-400">TDS: {formatINR(taxComparison?.tdsPaid || 0)}</p>
+            </>
+          )}
         </div>
       </div>
 
@@ -289,33 +332,84 @@ export default function TaxReconciliationModule() {
       {/* TAB 1: 3-WAY CROSS RECONCILIATION VIEW */}
       {activeTab === 'RECONCILIATION' && (
         <div className="space-y-6">
-          {/* Summary Banner */}
-          <div className="bg-amber-50/80 border border-amber-300 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-xs font-bold text-amber-900">
-                  {pendingDiscrepancies.length > 0
-                    ? `${pendingDiscrepancies.length} Cross-Document Discrepancies Detected • Moderate to High Risk`
-                    : 'All Cross-Document Items Successfully Reconciled ✓'}
-                </h4>
-                <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                  Comparing Form 16 (Part A & B), Form 26AS TRACES credits, and AIS / TIS SFT transaction codes. Accepting discrepancies automatically updates gross income schedules.
-                </p>
+          {/* Summary Banner / Missing Documents Warning */}
+          {isIncomplete ? (
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-5 shadow-xs space-y-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-sm font-bold text-amber-900">
+                    Pending Document Intake — Reconciliation Not Possible
+                  </h4>
+                  <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                    Taxpayer <span className="font-semibold">{activeClient?.name}</span> ({activeClient?.pan}) has uploaded only {activeClientDocs.length} of {activeClient?.docsRequired || 4} expected document categories. Complete 3-way cross-referencing between Form 16, TRACES 26AS, and AIS requires all statutory documents to be uploaded and parsed in the Document Vault.
+                  </p>
+                </div>
+              </div>
+
+              {activeDocBreakdown?.missingCategories?.length > 0 && (
+                <div className="bg-white rounded-lg p-3 border border-amber-200">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-2">
+                    Missing Document Categories Required for 3-Way Cross-Audit:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {activeDocBreakdown.missingCategories.map((cat) => (
+                      <div key={cat.category} className="flex items-center gap-2 text-amber-900 bg-amber-50/60 p-2 rounded border border-amber-200">
+                        <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span className="font-semibold">{cat.title}</span>
+                        <span className="text-[10px] text-amber-700 ml-auto">Awaiting Upload</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-1 flex items-center gap-3">
+                <button
+                  onClick={() => navigate('/document-intelligence')}
+                  className="px-4 py-2 text-xs font-bold rounded-lg bg-teal-600 hover:bg-teal-700 text-white flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Go to Document Vault to Upload Missing Documents</span>
+                </button>
               </div>
             </div>
+          ) : (
+            <div className={`border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+              pendingDiscrepancies.length > 0 ? 'bg-amber-50/80 border-amber-300' : 'bg-emerald-50/80 border-emerald-300'
+            }`}>
+              <div className="flex items-start gap-3">
+                {pendingDiscrepancies.length > 0 ? (
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                ) : (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <h4 className={`text-xs font-bold ${pendingDiscrepancies.length > 0 ? 'text-amber-900' : 'text-emerald-900'}`}>
+                    {pendingDiscrepancies.length > 0
+                      ? `${pendingDiscrepancies.length} Cross-Document Discrepancies Detected • Action Required`
+                      : 'All Cross-Document Items Successfully Reconciled ✓'}
+                  </h4>
+                  <p className={`text-[11px] mt-0.5 leading-relaxed ${pendingDiscrepancies.length > 0 ? 'text-amber-800' : 'text-emerald-800'}`}>
+                    {pendingDiscrepancies.length > 0
+                      ? 'Cross-referencing Form 16, Form 26AS, and AIS identified reporting variances. Accept discrepancies to update tax computations.'
+                      : 'Form 16 salary/professional receipts, TRACES 26AS tax credits, and AIS information codes are verified and fully reconciled.'}
+                  </p>
+                </div>
+              </div>
 
-            {pendingDiscrepancies.length > 0 && (
-              <button
-                onClick={() => {
-                  pendingDiscrepancies.forEach((i) => acceptDiscrepancy(i.id))
-                }}
-                className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 shadow-xs cursor-pointer"
-              >
-                Accept All & Recalculate
-              </button>
-            )}
-          </div>
+              {pendingDiscrepancies.length > 0 && (
+                <button
+                  onClick={() => {
+                    pendingDiscrepancies.forEach((i) => acceptDiscrepancy(i.id))
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 shadow-xs cursor-pointer"
+                >
+                  Accept All & Recalculate
+                </button>
+              )}
+            </div>
+          )}
 
           {/* 3-Way Side-by-Side Comparison Matrix */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
@@ -403,44 +497,79 @@ export default function TaxReconciliationModule() {
                       </tr>
                     )
                   })}
+                  {(!activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0) && (
+                    <tr>
+                      <td colSpan={6} className="py-10 text-center text-slate-500">
+                        <Clock className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                        <p className="font-bold text-slate-800 text-sm">No Cross-Reconciliation Data Available</p>
+                        <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                          Awaiting upload and OCR extraction of required tax documents for {activeClient?.name} ({activeClient?.pan}). Upload missing files in Document Vault to generate comparison matrix.
+                        </p>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* Action Explanations Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                <h4 className="text-xs font-bold text-slate-900">
-                  Finding 1: Unreported Savings Bank Interest (Sec 80TTA)
-                </h4>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                AIS SFT-005 reports ₹32,000 from HDFC Bank and ₹14,000 from SBI (Total: ₹46,000). Form 16 does not report this. Under Section 80TTA, taxpayers get a deduction up to ₹10,000. Net ₹36,000 must be taxed under Income from Other Sources to prevent CPC intimation under Section 143(1)(a).
-              </p>
+          {/* Action Explanations Cards - Dynamically derived from active client reconciliation items */}
+          {!isIncomplete && activeTaxCase?.reconciliationItems?.some((i) => i.status.includes('MISMATCH')) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {activeTaxCase.reconciliationItems
+                .filter((i) => i.status.includes('MISMATCH'))
+                .map((item, idx) => (
+                  <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`w-2 h-2 rounded-full ${item.riskLevel === 'High' ? 'bg-rose-500' : 'bg-amber-500'}`}></span>
+                      <h4 className="text-xs font-bold text-slate-900">
+                        Finding {idx + 1}: {item.item}
+                      </h4>
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      {item.noticeRisk || item.actionRequired || 'Discrepancy detected during 3-way cross-audit.'}
+                    </p>
+                    {item.sourceCitation && (
+                      <p className="text-[11px] text-teal-700 font-medium mt-1">
+                        Source Citation: {item.sourceCitation}
+                      </p>
+                    )}
+                  </div>
+                ))}
             </div>
-
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                <h4 className="text-xs font-bold text-slate-900">
-                  Finding 2: Mutual Fund LTCG Triggers ITR-2 Upgrade
-                </h4>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                AIS SFT-017 reports ₹58,000 long-term capital gains on Groww platform redemptions. Taxpayers cannot file ITR-1 Sahaj when capital gains exist; doing so generates a defective return notice under Section 139(9). System automatically upgrades filing to ITR-2 with Schedule CG.
-              </p>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
       {/* TAB 2: DETERMINISTIC REGIME OPTIMIZER */}
-      {activeTab === 'OPTIMIZER' && taxComparison && (
+      {activeTab === 'OPTIMIZER' && (
         <div className="space-y-6">
-          {/* Smart Recommendation Banner */}
+          {isIncomplete || !taxComparison ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-8 shadow-xs text-center space-y-4">
+              <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+                <Clock className="w-6 h-6" />
+              </div>
+              <div className="max-w-md mx-auto">
+                <h3 className="text-base font-bold text-slate-900">
+                  Regime Optimizer Awaiting Document Ingestion
+                </h3>
+                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                  Deterministic tax comparison between Old Regime and Section 115BAC New Regime requires validated income and deduction data. Upload Form 16 and AIS for <span className="font-semibold text-slate-800">{activeClient?.name}</span> ({activeClient?.pan}) to view the side-by-side slab comparison.
+                </p>
+              </div>
+              <div className="pt-2">
+                <button
+                  onClick={() => navigate('/document-intelligence')}
+                  className="px-4 py-2 text-xs font-semibold rounded-lg bg-teal-600 hover:bg-teal-700 text-white transition-colors flex items-center gap-1.5 shadow-xs mx-auto cursor-pointer"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Go to Document Vault</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Smart Recommendation Banner */}
           <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-start gap-3.5">
               <div className="p-2.5 rounded-xl bg-emerald-600 text-white shrink-0 shadow-xs">
@@ -633,6 +762,8 @@ export default function TaxReconciliationModule() {
               </div>
             </div>
           </div>
+          </>
+        )}
         </div>
       )}
 
@@ -660,7 +791,7 @@ export default function TaxReconciliationModule() {
                 <div className="flex items-center gap-2.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span className="font-medium text-slate-800">
-                    Sample PAN Master & Aadhaar Profile (Simulated Verification Demo)
+                    Sample PAN Master & Identity Profile (Verified for {activeClient?.name})
                   </span>
                 </div>
                 <span className="text-emerald-700 font-bold text-[11px]">PASSED ✓</span>
@@ -668,41 +799,65 @@ export default function TaxReconciliationModule() {
 
               <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="font-medium text-slate-800">
-                    Sample Form 16 Part A TDS matched with TRACES Form 26AS demo data
-                  </span>
-                </div>
-                <span className="text-emerald-700 font-bold text-[11px]">PASSED ✓</span>
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="font-medium text-slate-800">
-                    Pre-Validated Bank Account Sample (Simulated Direct Electronic Refund Demo)
-                  </span>
-                </div>
-                <span className="text-emerald-700 font-bold text-[11px]">PASSED ✓</span>
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  {pendingDiscrepancies.length === 0 ? (
+                  {!isIncomplete ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   ) : (
                     <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
                   )}
                   <span className="font-medium text-slate-800">
-                    3-Way Cross-Reconciliation Discrepancies Resolved (AIS SFT-005 interest & SFT-017 LTCG)
+                    Document Vault Intake Completeness ({activeClientDocs.length}/{activeClient?.docsRequired || 4} uploaded)
                   </span>
                 </div>
                 <span
                   className={`font-bold text-[11px] ${
-                    pendingDiscrepancies.length === 0 ? 'text-emerald-700' : 'text-amber-700'
+                    !isIncomplete ? 'text-emerald-700' : 'text-amber-700'
                   }`}
                 >
-                  {pendingDiscrepancies.length === 0 ? 'RESOLVED ✓' : `${pendingDiscrepancies.length} PENDING`}
+                  {!isIncomplete ? 'PASSED ✓' : 'INCOMPLETE INTAKE'}
+                </span>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  {!isIncomplete && activeTaxCase?.checklist?.form16Reconciled ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                  )}
+                  <span className="font-medium text-slate-800">
+                    Sample TDS Credits cross-referenced with TRACES Form 26AS ledger
+                  </span>
+                </div>
+                <span
+                  className={`font-bold text-[11px] ${
+                    !isIncomplete && activeTaxCase?.checklist?.form16Reconciled ? 'text-emerald-700' : 'text-amber-700'
+                  }`}
+                >
+                  {!isIncomplete && activeTaxCase?.checklist?.form16Reconciled ? 'PASSED ✓' : 'AWAITING INGESTION'}
+                </span>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  {pendingDiscrepancies.length === 0 && !isIncomplete ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                  )}
+                  <span className="font-medium text-slate-800">
+                    3-Way Cross-Reconciliation Discrepancies Resolved
+                  </span>
+                </div>
+                <span
+                  className={`font-bold text-[11px] ${
+                    pendingDiscrepancies.length === 0 && !isIncomplete ? 'text-emerald-700' : 'text-amber-700'
+                  }`}
+                >
+                  {isIncomplete
+                    ? 'AWAITING DOCUMENTS'
+                    : pendingDiscrepancies.length === 0
+                    ? 'RESOLVED ✓'
+                    : `${pendingDiscrepancies.length} PENDING`}
                 </span>
               </div>
             </div>
@@ -747,17 +902,25 @@ export default function TaxReconciliationModule() {
 
                 <button
                   onClick={handleApproveCase}
-                  disabled={activeTaxCase?.approval?.isApproved}
-                  className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-98 ${
+                  disabled={isIncomplete || pendingDiscrepancies.length > 0 || activeTaxCase?.approval?.isApproved}
+                  className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all shadow-md flex items-center gap-1.5 active:scale-98 ${
                     activeTaxCase?.approval?.isApproved
                       ? 'bg-emerald-600 text-white cursor-default'
-                      : 'bg-blue-600 hover:bg-blue-500 text-white font-bold'
+                      : isIncomplete
+                      ? 'bg-slate-700 text-slate-400 cursor-not-allowed border border-slate-600'
+                      : pendingDiscrepancies.length > 0
+                      ? 'bg-amber-600/80 text-white cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white font-bold cursor-pointer'
                   }`}
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>
                     {activeTaxCase?.approval?.isApproved
                       ? 'Approved by CA (Simulated Prototype Action) ✓'
+                      : isIncomplete
+                      ? 'Intake Incomplete — Upload Missing Documents First'
+                      : pendingDiscrepancies.length > 0
+                      ? `Resolve ${pendingDiscrepancies.length} Discrepancies Before Sign-Off`
                       : 'Simulate Sign-Off & Generate Filing Pack'}
                   </span>
                 </button>

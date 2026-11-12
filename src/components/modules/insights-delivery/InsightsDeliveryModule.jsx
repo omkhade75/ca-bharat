@@ -42,7 +42,7 @@ import {
 
 export default function InsightsDeliveryModule() {
   const navigate = useNavigate()
-  const { activeClient, activeTaxCase, auditLogs, firmDetails, activeAy } = useApp()
+  const { activeClient, activeTaxCase, activeClientDocs, recordReportGenerated, auditLogs, firmDetails, activeAy } = useApp()
 
   const [activeTab, setActiveTab] = useState('EYE_OPENER') // 'EYE_OPENER', 'GOLD_ADVISORY', 'COMMS', 'AUDIT'
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
@@ -50,8 +50,8 @@ export default function InsightsDeliveryModule() {
   const [copiedCommsId, setCopiedCommsId] = useState(null)
   const [selectedCommsTemplate, setSelectedCommsTemplate] = useState('MISSING_DOCS')
 
-  // Derive client-specific financial snapshot & intelligence
-  const snapshot = deriveClientFinancialSnapshot(activeClient, activeTaxCase)
+  // Derive client-specific financial snapshot & intelligence with actual client docs
+  const snapshot = deriveClientFinancialSnapshot(activeClient, activeTaxCase, activeClientDocs)
   const yoyData = generateYoYData(activeClient, snapshot)
   const allocationData = generateAllocationData(activeClient, snapshot)
   const clientInsights = generateClientWealthInsights(activeClient, activeTaxCase, snapshot)
@@ -88,8 +88,20 @@ export default function InsightsDeliveryModule() {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setIsReportModalOpen(true)}
-            className="px-3.5 py-2 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-98"
+            onClick={() => {
+              if (snapshot.isIncomplete) {
+                alert(`Cannot generate Financial Eye-Opener: Tax documents for ${activeClient?.name} are incomplete. Missing: ${snapshot.missingDocs?.join(', ') || 'Required documents'}.`)
+                return
+              }
+              setIsReportModalOpen(true)
+            }}
+            disabled={snapshot.isIncomplete}
+            className={`px-3.5 py-2 text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-xs transition-all ${
+              snapshot.isIncomplete
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer active:scale-98'
+            }`}
+            title={snapshot.isIncomplete ? `Intake incomplete for ${activeClient?.name}` : 'Download 2-Page Eye-Opener PDF'}
           >
             <Download className="w-4 h-4" />
             <span>Download 2-Page Eye-Opener PDF</span>
@@ -173,6 +185,21 @@ export default function InsightsDeliveryModule() {
                   Tax records for <span className="font-semibold text-slate-800">{activeClient?.name}</span> ({activeClient?.pan}) are currently in onboarding or awaiting intake verification. Upload Form 16, Form 26AS, or AIS statements to generate the visual financial snapshot and wealth insights.
                 </p>
               </div>
+
+              {snapshot.missingDocs && snapshot.missingDocs.length > 0 && (
+                <div className="bg-amber-50/80 border border-amber-200 rounded-lg p-3 text-left max-w-md mx-auto text-xs">
+                  <p className="font-bold text-amber-900 mb-1.5 flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    Missing Required Intake Documents ({snapshot.missingDocs.length}):
+                  </p>
+                  <ul className="list-disc pl-5 space-y-1 text-amber-800">
+                    {snapshot.missingDocs.map((doc, idx) => (
+                      <li key={idx} className="font-medium">{doc}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="pt-2 flex items-center justify-center gap-3">
                 <button
                   onClick={() => navigate('/document-intelligence')}
@@ -403,121 +430,163 @@ export default function InsightsDeliveryModule() {
       {/* TAB 2: GOLD MONTHLY ADVISORY PORTAL */}
       {activeTab === 'GOLD_ADVISORY' && (
         <div className="space-y-6">
-          {/* Gold Advisory Banner */}
-          <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-slate-50 border border-amber-300 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
-                Gold Monthly Advisory • Active Context: {activeClient?.name}
-              </span>
-              <h3 className="text-base font-bold text-slate-900 mt-1">
-                Ongoing Tax Planning & Advance Tax Monitoring
-              </h3>
-              <p className="text-xs text-slate-600 mt-0.5 max-w-2xl">
-                CAs eliminate the July burnout by managing client cash flow and advance tax quarterly. Taxpayers avoid surprise interest penalties under Section 234B and 234C.
-              </p>
-            </div>
-
-            <button
-              onClick={() => setIsConsultationModalOpen(true)}
-              className="px-4 py-2 text-xs font-bold rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition-colors flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
-            >
-              <PhoneCall className="w-3.5 h-3.5" />
-              <span>Schedule CA Quarterly Call</span>
-            </button>
-          </div>
-
-          {/* Advance Tax Progress Calendar */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">
-                  Advance Tax Compliance Calendar — {activeClient?.name} ({activeAy})
-                </h3>
-                <p className="text-xs text-slate-500">Mandatory quarterly tax deposits under Sections 208-211</p>
+          {snapshot.isIncomplete ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-8 shadow-xs text-center space-y-4">
+              <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+                <Clock className="w-6 h-6" />
               </div>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                Compliance Verified by CA
-              </span>
-            </div>
+              <div className="max-w-md mx-auto">
+                <h3 className="text-base font-bold text-slate-900">
+                  Gold Advisory Pending Document Intake
+                </h3>
+                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                  Advance tax compliance calendars and capital gains harvesting models for <span className="font-semibold text-slate-800">{activeClient?.name}</span> require verified income records. Please complete document intake and reconciliation before accessing monthly advisory modules.
+                </p>
+              </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-              {advanceTaxSchedule.map((item, idx) => (
-                <div
-                  key={idx}
-                  className={`p-4 rounded-xl border flex flex-col justify-between ${
-                    item.status === 'PAID'
-                      ? 'border-emerald-200 bg-emerald-50/40'
-                      : item.status === 'EXEMPT'
-                      ? 'border-blue-200 bg-blue-50/40'
-                      : 'border-slate-200 bg-white'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-slate-900">{item.quarter}</span>
-                      <span
-                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
-                          item.status === 'PAID'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : item.status === 'EXEMPT'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {item.status}
-                      </span>
-                    </div>
-                    <span className="text-lg font-bold text-slate-900 font-mono">
-                      {formatINR(item.targetAmount)}
-                    </span>
-                    <p className="text-[11px] text-slate-500 mt-0.5">Cumulative target: {item.percentage}</p>
-                  </div>
-
-                  <div className="mt-3 pt-3 border-t border-slate-200/60 text-[11px] text-slate-500 flex items-center justify-between">
-                    <span>Due: {item.dueDate}</span>
-                    {item.status === 'PAID' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
-                  </div>
+              {snapshot.missingDocs && snapshot.missingDocs.length > 0 && (
+                <div className="bg-amber-50/80 border border-amber-200 rounded-lg p-3 text-left max-w-md mx-auto text-xs">
+                  <p className="font-bold text-amber-900 mb-1.5 flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    Missing Required Intake Documents ({snapshot.missingDocs.length}):
+                  </p>
+                  <ul className="list-disc pl-5 space-y-1 text-amber-800">
+                    {snapshot.missingDocs.map((doc, idx) => (
+                      <li key={idx} className="font-medium">{doc}</li>
+                    ))}
+                  </ul>
                 </div>
-              ))}
-            </div>
-          </div>
+              )}
 
-          {/* March LTCG Tax-Loss Harvesting Widget */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">
-                  March LTCG Tax Harvesting Advisor (Sec 112A) — {activeClient?.name}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Utilize the annual ₹1.25 Lakhs tax-free equity capital gain exemption before March 31
-                </p>
+              <div className="pt-2 flex items-center justify-center gap-3">
+                <button
+                  onClick={() => navigate('/document-intelligence')}
+                  className="px-4 py-2 text-xs font-semibold rounded-lg bg-teal-600 hover:bg-teal-700 text-white transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Go to Document Vault</span>
+                </button>
               </div>
-              <span className="text-xs font-bold text-teal-700 font-mono">
-                {formatINR(snapshot.ltcgUtilized)} / ₹1,25,000 Utilized
-              </span>
             </div>
+          ) : (
+            <>
+              {/* Gold Advisory Banner */}
+              <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-slate-50 border border-amber-300 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                    Gold Monthly Advisory • Active Context: {activeClient?.name}
+                  </span>
+                  <h3 className="text-base font-bold text-slate-900 mt-1">
+                    Ongoing Tax Planning & Advance Tax Monitoring
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5 max-w-2xl">
+                    CAs eliminate the July burnout by managing client cash flow and advance tax quarterly. Taxpayers avoid surprise interest penalties under Section 234B and 234C.
+                  </p>
+                </div>
 
-            {/* Progress bar */}
-            <div className="w-full bg-slate-100 rounded-full h-3 mb-3 overflow-hidden">
-              <div className="bg-teal-600 h-3 rounded-full transition-all" style={{ width: `${ltcgPercentage}%` }} />
-            </div>
-
-            <div className="p-3.5 bg-teal-50/80 rounded-xl border border-teal-200 text-xs text-teal-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <span className="font-bold">1-Click Harvesting Recommendation:</span>
-                <p className="text-teal-800 mt-0.5">
-                  {activeClient?.name} has <b>{formatINR(ltcgHeadroom)} remaining</b> of tax-free headroom under Section 112A. Selling and repurchasing up to {formatINR(ltcgHeadroom)} of appreciated mutual funds before March 31 permanently resets the acquisition cost basis at <b>0% tax</b>. (Subject to STT and brokerage).
-                </p>
+                <button
+                  onClick={() => setIsConsultationModalOpen(true)}
+                  className="px-4 py-2 text-xs font-bold rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition-colors flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
+                >
+                  <PhoneCall className="w-3.5 h-3.5" />
+                  <span>Schedule CA Quarterly Call</span>
+                </button>
               </div>
-              <button
-                onClick={() => alert(`Harvesting trade instructions dispatched to ${activeClient?.name}'s WhatsApp.`)}
-                className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold shrink-0 cursor-pointer text-xs"
-              >
-                Send Advice to Client
-              </button>
-            </div>
-          </div>
+
+              {/* Advance Tax Progress Calendar */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">
+                      Advance Tax Compliance Calendar — {activeClient?.name} ({activeAy})
+                    </h3>
+                    <p className="text-xs text-slate-500">Mandatory quarterly tax deposits under Sections 208-211</p>
+                  </div>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                    Compliance Verified by CA
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                  {advanceTaxSchedule.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-4 rounded-xl border flex flex-col justify-between ${
+                        item.status === 'PAID'
+                          ? 'border-emerald-200 bg-emerald-50/40'
+                          : item.status === 'EXEMPT'
+                          ? 'border-blue-200 bg-blue-50/40'
+                          : 'border-slate-200 bg-white'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-slate-900">{item.quarter}</span>
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                              item.status === 'PAID'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : item.status === 'EXEMPT'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {item.status}
+                          </span>
+                        </div>
+                        <span className="text-lg font-bold text-slate-900 font-mono">
+                          {formatINR(item.targetAmount)}
+                        </span>
+                        <p className="text-[11px] text-slate-500 mt-0.5">Cumulative target: {item.percentage}</p>
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-slate-200/60 text-[11px] text-slate-500 flex items-center justify-between">
+                        <span>Due: {item.dueDate}</span>
+                        {item.status === 'PAID' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* March LTCG Tax-Loss Harvesting Widget */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">
+                      March LTCG Tax Harvesting Advisor (Sec 112A) — {activeClient?.name}
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Utilize the annual ₹1.25 Lakhs tax-free equity capital gain exemption before March 31
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold text-teal-700 font-mono">
+                    {formatINR(snapshot.ltcgUtilized)} / ₹1,25,000 Utilized
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full bg-slate-100 rounded-full h-3 mb-3 overflow-hidden">
+                  <div className="bg-teal-600 h-3 rounded-full transition-all" style={{ width: `${ltcgPercentage}%` }} />
+                </div>
+
+                <div className="p-3.5 bg-teal-50/80 rounded-xl border border-teal-200 text-xs text-teal-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="font-bold">1-Click Harvesting Recommendation:</span>
+                    <p className="text-teal-800 mt-0.5">
+                      {activeClient?.name} has <b>{formatINR(ltcgHeadroom)} remaining</b> of tax-free headroom under Section 112A. Selling and repurchasing up to {formatINR(ltcgHeadroom)} of appreciated mutual funds before March 31 permanently resets the acquisition cost basis at <b>0% tax</b>. (Subject to STT and brokerage).
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => alert(`Harvesting trade instructions dispatched to ${activeClient?.name}'s WhatsApp.`)}
+                    className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold shrink-0 cursor-pointer text-xs"
+                  >
+                    Send Advice to Client
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -742,14 +811,18 @@ export default function InsightsDeliveryModule() {
             </span>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => window.print()}
+                onClick={() => {
+                  recordReportGenerated(activeTaxCase?.id)
+                  window.print()
+                }}
                 className="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
               >
                 Print / Save PDF (Simulated)
               </button>
               <button
                 onClick={() => {
-                  alert(`2-Page Visual Financial Eye-Opener PDF downloaded for ${activeClient?.name}.`)
+                  recordReportGenerated(activeTaxCase?.id)
+                  alert(`2-Page Visual Financial Eye-Opener PDF downloaded for ${activeClient?.name}. Case state updated to Report Generated.`)
                   setIsReportModalOpen(false)
                 }}
                 className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold cursor-pointer"

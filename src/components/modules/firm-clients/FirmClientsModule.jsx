@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '../../../context/AppContext'
 import { formatDate } from '../../../utils/formatters'
+import { WORKFLOW_STATUS_META } from '../../../utils/workflowHelper'
 import Badge from '../../common/Badge'
 import Modal from '../../common/Modal'
 
@@ -25,6 +26,8 @@ export default function FirmClientsModule() {
     setActiveClientId,
     addClient,
     updateClient,
+    grantConsent,
+    getWorkflowStageForClient,
     team,
     consents,
     firmDetails,
@@ -265,6 +268,40 @@ export default function FirmClientsModule() {
           </div>
 
           {/* Taxpayers Grid/Table */}
+          {/* Pending Consent Action Banner for Testing */}
+          {clients.filter((c) => c.consentStatus === 'Pending' || c.consentStatus === 'Pending Renewal').length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-xs">
+              <h4 className="text-xs font-bold text-amber-900 mb-2">
+                Clients Awaiting DPDP Digital Consent Authorization
+              </h4>
+              <div className="space-y-2">
+                {clients
+                  .filter((c) => c.consentStatus === 'Pending' || c.consentStatus === 'Pending Renewal')
+                  .map((pendingClient) => (
+                    <div
+                      key={pendingClient.id}
+                      className="bg-white p-3 rounded-lg border border-amber-200/80 flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div>
+                        <span className="font-bold text-slate-900">{pendingClient.name}</span>
+                        <span className="text-slate-500 font-mono ml-2">({pendingClient.pan})</span>
+                        <p className="text-[11px] text-amber-800 mt-0.5">
+                          Status: {pendingClient.consentStatus} • Requires digital authorization before document processing.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => grantConsent(pendingClient.id)}
+                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shrink-0 shadow-xs cursor-pointer flex items-center gap-1.5"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>Simulate OTP Authorization</span>
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
@@ -273,7 +310,8 @@ export default function FirmClientsModule() {
                     <th className="py-3 px-4">Client Name & PAN</th>
                     <th className="py-3 px-3">Tax Category</th>
                     <th className="py-3 px-3">Advisory Tier</th>
-                    <th className="py-3 px-3">Consent Status</th>
+                    <th className="py-3 px-3">Workflow Status</th>
+                    <th className="py-3 px-3">Consent</th>
                     <th className="py-3 px-3">Docs Vault</th>
                     <th className="py-3 px-3">Assigned Staff</th>
                     <th className="py-3 px-4 text-right">Actions</th>
@@ -329,6 +367,25 @@ export default function FirmClientsModule() {
                           >
                             {client.tier}
                           </span>
+                        </td>
+
+                        <td className="py-3 px-3">
+                          {(() => {
+                            const stage = getWorkflowStageForClient ? getWorkflowStageForClient(client) : client.status
+                            const meta = WORKFLOW_STATUS_META[stage]
+                            if (meta) {
+                              return (
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${meta.colorClasses}`}>
+                                  {meta.label}
+                                </span>
+                              )
+                            }
+                            return (
+                              <Badge variant="default" size="xs">
+                                {client.status}
+                              </Badge>
+                            )
+                          })()}
                         </td>
 
                         <td className="py-3 px-3">
@@ -493,6 +550,40 @@ export default function FirmClientsModule() {
               </p>
             </div>
           </div>
+
+          {/* Pending Consent Action Banner for Testing */}
+          {clients.filter((c) => c.consentStatus === 'Pending' || c.consentStatus === 'Pending Renewal').length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-xs">
+              <h4 className="text-xs font-bold text-amber-900 mb-2">
+                Clients Awaiting DPDP Digital Consent Authorization
+              </h4>
+              <div className="space-y-2">
+                {clients
+                  .filter((c) => c.consentStatus === 'Pending' || c.consentStatus === 'Pending Renewal')
+                  .map((pendingClient) => (
+                    <div
+                      key={pendingClient.id}
+                      className="bg-white p-3 rounded-lg border border-amber-200/80 flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div>
+                        <span className="font-bold text-slate-900">{pendingClient.name}</span>
+                        <span className="text-slate-500 font-mono ml-2">({pendingClient.pan})</span>
+                        <p className="text-[11px] text-amber-800 mt-0.5">
+                          Status: {pendingClient.consentStatus} • Requires digital authorization before document processing.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => grantConsent(pendingClient.id)}
+                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shrink-0 shadow-xs cursor-pointer flex items-center gap-1.5"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>Simulate OTP Authorization</span>
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
 
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">

@@ -18,7 +18,7 @@ import { useApp } from '../../context/AppContext'
 import Logo from '../common/Logo'
 
 export default function Sidebar({ isMobileOpen = false, onCloseMobile = () => {} }) {
-  const { clients, activeClient, setActiveClientId, firmDetails } = useApp()
+  const { clients, activeClient, setActiveClientId, firmDetails, activeWorkflowMeta } = useApp()
 
   const navItems = [
     {
@@ -132,8 +132,8 @@ export default function Sidebar({ isMobileOpen = false, onCloseMobile = () => {}
         {activeClient && (
           <div className="flex items-center justify-between mt-1.5 text-[11px] text-slate-400">
             <span className="truncate">{activeClient.category.split(' - ')[0]}</span>
-            <span className={`font-semibold ${activeClient.discrepancyCount > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-              {activeClient.discrepancyCount > 0 ? `${activeClient.discrepancyCount} Mismatch` : 'Reconciled ✓'}
+            <span className={`font-semibold ${activeWorkflowMeta?.sidebarColor || 'text-slate-400'}`}>
+              {activeWorkflowMeta?.sidebarBadge || 'Active'}
             </span>
           </div>
         )}

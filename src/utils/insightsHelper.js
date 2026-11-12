@@ -7,9 +7,20 @@ import { formatINR } from './formatters'
 /**
  * Checks whether the client's tax case has sufficient data to generate insights.
  */
-export function isClientDataIncomplete(client, taxCase) {
+export function isClientDataIncomplete(client, taxCase, clientDocs = []) {
   if (!client || !taxCase) return true
-  if (client.status === 'Onboarding') return true
+  if (
+    client.status === 'Onboarding' ||
+    client.status === 'Documents Pending' ||
+    client.status === 'Pending Intake' ||
+    client.status === 'Consent Pending'
+  ) {
+    return true
+  }
+  const uploadedCount = clientDocs.length || client.docsUploaded || 0
+  const requiredCount = client.docsRequired || 3
+  if (uploadedCount < requiredCount) return true
+
   const totalIncomes =
     (taxCase.incomes?.salary || 0) +
     (taxCase.incomes?.otherSources || 0) +
@@ -21,10 +32,22 @@ export function isClientDataIncomplete(client, taxCase) {
 /**
  * Derives consistent financial snapshot figures for the active client.
  */
-export function deriveClientFinancialSnapshot(client, taxCase) {
-  if (!client || !taxCase || isClientDataIncomplete(client, taxCase)) {
+export function deriveClientFinancialSnapshot(client, taxCase, clientDocs = []) {
+  if (!client || !taxCase || isClientDataIncomplete(client, taxCase, clientDocs)) {
+    // Determine missing documents
+    const uploadedCategories = new Set((clientDocs || []).map((d) => d.category))
+    const missingDocs = []
+    if (!uploadedCategories.has('Form 16')) missingDocs.push('Form 16 (Part A & B)')
+    if (!uploadedCategories.has('Form 26AS')) missingDocs.push('TRACES Form 26AS')
+    if (!uploadedCategories.has('AIS / TIS')) missingDocs.push('AIS / TIS Statement')
+    if (!uploadedCategories.has('Bank Statement / Certificate') && !uploadedCategories.has('Supporting Schedule')) {
+      missingDocs.push(client?.category?.includes('Professional') ? 'Clinic P&L / Receipts Statement' : 'Bank Statement / Sec 24(b) Certificate')
+    }
+
     return {
       isIncomplete: true,
+      clientName: client?.name || 'Selected Client',
+      pan: client?.pan || '—',
       grossIncome: 0,
       taxPaid: 0,
       savingsAndInvestments: 0,
@@ -33,8 +56,9 @@ export function deriveClientFinancialSnapshot(client, taxCase) {
       savingsRate: '0.0',
       savingsInterest: 0,
       ltcgUtilized: 0,
+      missingDocs: missingDocs.length > 0 ? missingDocs : ['Form 16 (Part A & B)', 'AIS / TIS Statement', 'Supporting Certificates'],
       assumptions: [
-        'Client profile in onboarding state. Awaiting document intake for Form 16, 26AS, or AIS.',
+        'Client profile in incomplete intake state. Awaiting required statutory tax documents.',
       ],
     }
   }

@@ -13,7 +13,7 @@ export const INITIAL_CLIENTS = [
     employer: 'Demo Tech Solutions Ltd (TAN: DEMO01928F)',
     tier: 'Gold', // Silver, Gold, Platinum
     activeAY: 'AY 2025-26',
-    status: 'Action Required', // 'Onboarding', 'Action Required', 'Ready for Review', 'Filed'
+    status: 'Discrepancies Found', // 'Onboarding', 'Consent Pending', 'Documents Pending', 'Discrepancies Found', 'Ready for Review', 'CA Approved'
     itrType: 'ITR-2', // Upgraded due to AIS Mutual Fund Capital Gains
     assignedTo: 'Ananya Joshi (Senior Associate)',
     consentStatus: 'Active',
@@ -63,7 +63,7 @@ export const INITIAL_CLIENTS = [
     employer: 'Demo Enterprise Services Ltd (TAN: DEMO08832K)',
     tier: 'Silver',
     activeAY: 'AY 2025-26',
-    status: 'Filed',
+    status: 'CA Approved',
     itrType: 'ITR-1',
     assignedTo: 'Rohan Mehta (Junior Associate)',
     consentStatus: 'Active',
@@ -88,7 +88,7 @@ export const INITIAL_CLIENTS = [
     employer: 'Demo Fintech Systems Pvt Ltd (TAN: DEMO06512P)',
     tier: 'Gold',
     activeAY: 'AY 2025-26',
-    status: 'Action Required',
+    status: 'Consent Pending',
     itrType: 'ITR-2',
     assignedTo: 'Ananya Joshi (Senior Associate)',
     consentStatus: 'Pending Renewal',
@@ -138,7 +138,7 @@ export const INITIAL_CLIENTS = [
     employer: 'Demo Healthcare Trust',
     tier: 'Gold',
     activeAY: 'AY 2025-26',
-    status: 'Onboarding',
+    status: 'Documents Pending',
     itrType: 'ITR-3',
     assignedTo: 'Rohan Mehta (Junior Associate)',
     consentStatus: 'Active',

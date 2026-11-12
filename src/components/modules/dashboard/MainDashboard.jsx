@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  TrendingUp,
   FileText,
   Upload,
   UserPlus,
@@ -18,6 +17,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '../../../context/AppContext'
 import { formatINR, formatDate, maskPAN } from '../../../utils/formatters'
+import { WORKFLOW_STATUS_META } from '../../../utils/workflowHelper'
 import Badge from '../../common/Badge'
 import { LogoMark } from '../../common/Logo'
 
@@ -32,24 +32,44 @@ export default function MainDashboard() {
     activeTaxCase,
     auditLogs,
     activeAy,
+    getWorkflowStageForClient,
   } = useApp()
 
   const [filterStatus, setFilterStatus] = useState('ALL')
 
-  // Calculate metrics dynamically from coherent dataset
-  const totalClientsCount = clients.length
+  // Calculate metrics dynamically from coherent dataset - strictly adhering to Requirement 7:
+  // 1. Firm-wide client count
+  // 2. Firm-wide document count
+  // 3. Active cases
+  // 4. Cases with unresolved discrepancies
+  // 5. Cases awaiting CA review
+  // 6. Approved cases
+  const firmWideClientCount = clients.length
+  const firmWideDocumentCount = documents.length
   const activeCasesCount = taxCases.length
-  const documentsProcessedCount = documents.length
-  const discrepancyCount = clients.reduce((acc, c) => acc + (c.discrepancyCount || 0), 0)
-  const awaitingApprovalCount = clients.filter((c) => c.status === 'Ready for Review').length
-  const illustrativeRefundTotal = clients.reduce((acc, c) => acc + (c.refundExpected || 0), 0)
+  const casesWithDiscrepanciesCount = taxCases.filter(
+    (tc) =>
+      tc.reconciliationItems?.some((i) => !i.isAccepted && i.status.includes('MISMATCH')) ||
+      (clients.find((c) => c.id === tc.clientId)?.discrepancyCount > 0)
+  ).length
+  const casesAwaitingReviewCount = taxCases.filter(
+    (tc) =>
+      !tc.approval?.isApproved &&
+      (tc.status === 'Ready for Review' ||
+        (tc.reconciliationItems?.length > 0 &&
+          tc.reconciliationItems.every((i) => i.isAccepted || i.status.startsWith('MATCHED'))))
+  ).length
+  const casesApprovedCount = taxCases.filter((tc) => tc.approval?.isApproved).length
+  const totalMismatchesCount = clients.reduce((acc, c) => acc + (c.discrepancyCount || 0), 0)
 
   // Filter clients table
   const filteredClients = clients.filter((c) => {
     if (filterStatus === 'ALL') return true
-    if (filterStatus === 'ACTION_REQUIRED') return c.status === 'Action Required'
-    if (filterStatus === 'READY_FOR_REVIEW') return c.status === 'Ready for Review'
-    if (filterStatus === 'FILED') return c.status === 'Filed'
+    const stage = getWorkflowStageForClient ? getWorkflowStageForClient(c) : c.status
+    if (filterStatus === 'DISCREPANCIES') return stage === 'DISCREPANCIES_FOUND' || c.discrepancyCount > 0
+    if (filterStatus === 'READY_FOR_REVIEW') return stage === 'READY_FOR_CA_REVIEW' || c.status === 'Ready for Review'
+    if (filterStatus === 'APPROVED') return stage === 'CA_APPROVED' || stage === 'REPORT_GENERATED' || c.status === 'CA Approved'
+    if (filterStatus === 'INTAKE_PENDING') return stage === 'DOCUMENTS_PENDING' || stage === 'ONBOARDING' || stage === 'CONSENT_PENDING'
     return true
   })
 
@@ -102,62 +122,68 @@ export default function MainDashboard() {
         </div>
       </div>
 
-      {/* 6 High-Fidelity Enterprise Metric Cards */}
+      {/* 6 High-Fidelity Enterprise Metric Cards (Adhering strictly to Requirement 7) */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+        {/* Metric 1: Firm-wide client count */}
         <div className="bg-white rounded-xl p-4 border border-slate-200 border-t-2 border-t-slate-400 shadow-xs hover:border-slate-300 transition-colors">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider">Total Clients</span>
             <Users className="w-4 h-4 text-slate-400" />
           </div>
-          <div className="text-2xl font-bold text-slate-900">{totalClientsCount}</div>
+          <div className="text-2xl font-bold text-slate-900">{firmWideClientCount}</div>
           <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-            <span className="text-emerald-600 font-semibold">{clients.filter((c) => c.status === 'Filed').length} Filed</span> • {clients.filter((c) => c.status === 'Onboarding').length} Intake
+            <span className="text-emerald-600 font-semibold">{casesApprovedCount} Approved</span> • {clients.filter((c) => c.status === 'Documents Pending' || c.status === 'Onboarding').length} Intake
           </p>
         </div>
 
+        {/* Metric 2: Firm-wide document count */}
+        <div className="bg-white rounded-xl p-4 border border-slate-200 border-t-2 border-t-indigo-500 shadow-xs hover:border-indigo-300 transition-colors">
+          <div className="flex items-center justify-between text-slate-500 mb-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider">Total Documents</span>
+            <FileCheck2 className="w-4 h-4 text-indigo-600" />
+          </div>
+          <div className="text-2xl font-bold text-slate-900">{firmWideDocumentCount}</div>
+          <p className="text-[11px] text-indigo-600 font-semibold mt-1">Encrypted In-Memory Vault</p>
+        </div>
+
+        {/* Metric 3: Active cases */}
         <div className="bg-white rounded-xl p-4 border border-slate-200 border-t-2 border-t-blue-500 shadow-xs hover:border-blue-300 transition-colors">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Active Tax Cases</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider">Active Cases</span>
             <FileText className="w-4 h-4 text-blue-500" />
           </div>
           <div className="text-2xl font-bold text-slate-900">{activeCasesCount}</div>
-          <p className="text-[11px] text-slate-500 mt-1">In progress for {activeAy}</p>
+          <p className="text-[11px] text-slate-500 mt-1">{activeAy} Lifecycle</p>
         </div>
 
-        <div className="bg-white rounded-xl p-4 border border-slate-200 border-t-2 border-t-indigo-500 shadow-xs hover:border-indigo-300 transition-colors">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Docs Processed</span>
-            <FileCheck2 className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div className="text-2xl font-bold text-slate-900">{documentsProcessedCount}</div>
-          <p className="text-[11px] text-indigo-600 font-semibold mt-1">Simulated Vault</p>
-        </div>
-
+        {/* Metric 4: Cases with unresolved discrepancies */}
         <div className="bg-white rounded-xl p-4 border border-amber-200/90 border-t-2 border-t-amber-500 bg-amber-50/20 shadow-xs hover:border-amber-300 transition-colors">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">Discrepancies</span>
             <AlertTriangle className="w-4 h-4 text-amber-500" />
           </div>
-          <div className="text-2xl font-bold text-amber-600">{discrepancyCount}</div>
-          <p className="text-[11px] text-amber-700/80 mt-1">Cross-doc mismatches</p>
+          <div className="text-2xl font-bold text-amber-600">{casesWithDiscrepanciesCount}</div>
+          <p className="text-[11px] text-amber-700/80 mt-1">{totalMismatchesCount} Unresolved Mismatches</p>
         </div>
 
+        {/* Metric 5: Cases awaiting CA review */}
         <div className="bg-white rounded-xl p-4 border border-slate-200 border-t-2 border-t-violet-500 shadow-xs hover:border-violet-300 transition-colors">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">CA Approval Due</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider">Awaiting Review</span>
             <Clock className="w-4 h-4 text-violet-500" />
           </div>
-          <div className="text-2xl font-bold text-violet-600">{awaitingApprovalCount}</div>
-          <p className="text-[11px] text-slate-500 mt-1">Ready for sign-off</p>
+          <div className="text-2xl font-bold text-violet-600">{casesAwaitingReviewCount}</div>
+          <p className="text-[11px] text-slate-500 mt-1">Reconciled & Ready</p>
         </div>
 
+        {/* Metric 6: Approved cases */}
         <div className="bg-white rounded-xl p-4 border border-emerald-200 border-t-2 border-t-emerald-500 shadow-xs bg-emerald-50/30 hover:border-emerald-300 transition-colors">
           <div className="flex items-center justify-between text-emerald-800 mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Illustrative Refunds</span>
-            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-800">Approved Cases</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
-          <div className="text-2xl font-bold text-emerald-700 font-mono">{formatINR(illustrativeRefundTotal, { compact: true })}</div>
-          <p className="text-[11px] text-emerald-600 font-medium mt-1">Sample Tax Calculation</p>
+          <div className="text-2xl font-bold text-emerald-700 font-mono">{casesApprovedCount}</div>
+          <p className="text-[11px] text-emerald-600 font-medium mt-1">Simulated CA Sign-Off</p>
         </div>
       </div>
 
@@ -204,7 +230,7 @@ export default function MainDashboard() {
               </div>
               <p className="text-[11px] text-amber-800 mt-1">Form 16 vs 26AS vs AIS cross-check with coordinate citations</p>
             </div>
-            <div className="mt-3 text-[10px] font-bold text-amber-900">{taxCases.filter((tc) => tc.status === 'Discrepancy Detected').length} Cases Flagged</div>
+            <div className="mt-3 text-[10px] font-bold text-amber-900">{casesWithDiscrepanciesCount} Cases Flagged</div>
           </div>
 
           <div className="p-3 rounded-lg border border-blue-200 bg-blue-50/50 flex flex-col justify-between">
@@ -215,7 +241,7 @@ export default function MainDashboard() {
               </div>
               <p className="text-[11px] text-blue-800 mt-1">Old vs New Regime optimizer + simulated CA approval gateway</p>
             </div>
-            <div className="mt-3 text-[10px] font-semibold text-blue-900">{awaitingApprovalCount} Ready for CA Review</div>
+            <div className="mt-3 text-[10px] font-semibold text-blue-900">{casesAwaitingReviewCount} Ready for CA Review</div>
           </div>
 
           <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/50 flex flex-col justify-between">
@@ -226,7 +252,7 @@ export default function MainDashboard() {
               </div>
               <p className="text-[11px] text-purple-800 mt-1">Sample wealth scorecard, quarterly Advance Tax & advisory</p>
             </div>
-            <div className="mt-3 text-[10px] font-semibold text-purple-900">{clients.filter((c) => c.status === 'Filed').length} Cases Delivered</div>
+            <div className="mt-3 text-[10px] font-semibold text-purple-900">{casesApprovedCount} Cases Delivered</div>
           </div>
         </div>
       </div>
@@ -277,35 +303,35 @@ export default function MainDashboard() {
             <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 border border-slate-200 text-xs">
               <button
                 onClick={() => setFilterStatus('ALL')}
-                className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
+                className={`px-2 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
                   filterStatus === 'ALL' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 All ({clients.length})
               </button>
               <button
-                onClick={() => setFilterStatus('ACTION_REQUIRED')}
-                className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-                  filterStatus === 'ACTION_REQUIRED' ? 'bg-white text-amber-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                onClick={() => setFilterStatus('DISCREPANCIES')}
+                className={`px-2 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
+                  filterStatus === 'DISCREPANCIES' ? 'bg-white text-rose-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Discrepancy ({clients.filter((c) => c.status === 'Action Required').length})
+                Discrepancies ({casesWithDiscrepanciesCount})
               </button>
               <button
                 onClick={() => setFilterStatus('READY_FOR_REVIEW')}
-                className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-                  filterStatus === 'READY_FOR_REVIEW' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                className={`px-2 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
+                  filterStatus === 'READY_FOR_REVIEW' ? 'bg-white text-purple-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Review ({clients.filter((c) => c.status === 'Ready for Review').length})
+                Review ({casesAwaitingReviewCount})
               </button>
               <button
-                onClick={() => setFilterStatus('FILED')}
-                className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-                  filterStatus === 'FILED' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                onClick={() => setFilterStatus('APPROVED')}
+                className={`px-2 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
+                  filterStatus === 'APPROVED' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Filed ({clients.filter((c) => c.status === 'Filed').length})
+                Approved ({casesApprovedCount})
               </button>
             </div>
           </div>
@@ -377,23 +403,22 @@ export default function MainDashboard() {
                       </td>
 
                       <td className="py-3 px-3">
-                        {client.status === 'Action Required' ? (
-                          <Badge variant="warning" size="xs">
-                            {client.discrepancyCount} Discrepancy
-                          </Badge>
-                        ) : client.status === 'Ready for Review' ? (
-                          <Badge variant="primary" size="xs">
-                            Ready for Review
-                          </Badge>
-                        ) : client.status === 'Filed' ? (
-                          <Badge variant="success" size="xs">
-                            Filed & Verified ✓
-                          </Badge>
-                        ) : (
-                          <Badge variant="default" size="xs">
-                            {client.status}
-                          </Badge>
-                        )}
+                        {(() => {
+                          const stage = getWorkflowStageForClient ? getWorkflowStageForClient(client) : client.status
+                          const meta = WORKFLOW_STATUS_META[stage]
+                          if (meta) {
+                            return (
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${meta.colorClasses}`}>
+                                {meta.label}
+                              </span>
+                            )
+                          }
+                          return (
+                            <Badge variant="default" size="xs">
+                              {client.status}
+                            </Badge>
+                          )
+                        })()}
                       </td>
 
                       <td className="py-3 px-3 font-semibold text-slate-800">

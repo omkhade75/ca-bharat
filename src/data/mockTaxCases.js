@@ -11,7 +11,7 @@ export const INITIAL_TAX_CASES = [
     assessmentYear: 'AY 2025-26',
     financialYear: 'FY 2024-25',
     filingForm: 'ITR-2', // Upgraded from ITR-1 due to capital gains
-    status: 'Discrepancy Detected', // 'Pending Intake', 'Discrepancy Detected', 'Ready for Review', 'CA Approved', 'ITR JSON Generated'
+    status: 'Discrepancies Found', // 'Documents Pending', 'Discrepancies Found', 'Ready for Review', 'CA Approved'
     assignedCa: 'CA Rajesh Sharma (Partner • FCA #DEMO049281)',
     reviewerNotes: 'AIS shows unreported savings interest of ₹46k and ₹58k LTCG from mutual funds. Upgraded from ITR-1 to ITR-2.',
 
@@ -422,7 +422,7 @@ export const INITIAL_TAX_CASES = [
     assessmentYear: 'AY 2025-26',
     financialYear: 'FY 2024-25',
     filingForm: 'ITR-3',
-    status: 'Pending Intake',
+    status: 'Documents Pending',
     assignedCa: 'Rohan Mehta (Junior Associate)',
     reviewerNotes: 'Taxpayer profile onboarded. Pending document receipt from client.',
     checklist: {

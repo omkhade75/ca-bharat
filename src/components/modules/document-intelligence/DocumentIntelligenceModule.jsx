@@ -20,6 +20,7 @@ export default function DocumentIntelligenceModule() {
   const {
     activeClient,
     activeClientDocs,
+    activeDocBreakdown,
     addDocument,
     isSimulatingExtraction,
     runSimulatedExtraction,
@@ -61,26 +62,36 @@ export default function DocumentIntelligenceModule() {
 
   // Handle mock file upload
   const handleSimulateDrop = (category, subType, defaultFileName) => {
+    const isProfessional = activeClient?.category?.includes('Professional')
+    const sanitizedName = (activeClient?.name || 'Taxpayer').replace(/[^a-zA-Z0-9]/g, '_')
     addDocument({
-      name: `${activeClient?.name?.replace(/\s+/g, '_')}_${defaultFileName}`,
+      name: `${sanitizedName}_${isProfessional && category === 'Form 16' ? 'Form16A_Receipts.pdf' : defaultFileName}`,
       category,
       subType,
       fileSize: '1.2 MB',
       pageCount: category === 'AIS / TIS' ? 7 : 3,
       isCompletePartB: true,
       extractionConfidence: 98.4,
-      extractedData: {
-        grossSalary: 1500000,
-        standardDeduction: 50000,
-        sec80C: 150000,
-        sec80D: 25000,
-        sec24b: 200000,
-        tdsSalary: 180000,
-      },
+      extractedData: isProfessional
+        ? {
+            grossSalary: 0,
+            grossProfessional: 1800000,
+            sec80C: 150000,
+            sec80D: 50000,
+            tdsSalary: 180000,
+          }
+        : {
+            grossSalary: 1500000,
+            standardDeduction: 50000,
+            sec80C: 150000,
+            sec80D: 25000,
+            sec24b: 200000,
+            tdsSalary: 180000,
+          },
       boundingCitations: [
         {
-          field: 'Gross Salary (Sec 17(1))',
-          value: '₹15,00,000',
+          field: isProfessional ? 'Professional Receipts (Sec 194J)' : 'Gross Salary (Sec 17(1))',
+          value: isProfessional ? '₹18,00,000' : '₹15,00,000',
           page: 2,
           line: 'Line 1(a)',
           bbox: { top: 210, left: 320, width: 140, height: 26 },
@@ -221,111 +232,185 @@ export default function DocumentIntelligenceModule() {
       {/* TAB 1: SMART UPLOAD VAULT WITH 4 DROPZONES */}
       {activeTab === 'VAULT' && (
         <div className="space-y-6">
+          {/* Missing Documents Alert Banner for Incomplete Intake */}
+          {activeDocBreakdown?.missingCategories?.length > 0 && (
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-bold text-amber-900">
+                    Incomplete Intake for {activeClient?.name} • {activeDocBreakdown.missingCategories.length} Required Categories Missing
+                  </h4>
+                  <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                    Uploaded: {activeClientDocs.length} of {activeClient?.docsRequired || 4} expected documents. Awaiting: {activeDocBreakdown.missingCategories.map((c) => c.title).join(', ')}. Upload missing documents below to enable full AI extraction, 3-way reconciliation, and financial insights.
+                  </p>
+                </div>
+              </div>
+              <div className="shrink-0 flex items-center gap-2">
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-200/80 text-amber-900 border border-amber-300">
+                  {activeClientDocs.length} / {activeClient?.docsRequired || 4} Uploaded
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* 4 Dedicated Dropzones */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Dropzone 1: Form 16 Part A & B */}
-            <div className="bg-white rounded-xl border border-dashed border-slate-300 p-4 hover:border-teal-500 transition-colors flex flex-col justify-between group">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">
-                    Mandatory
-                  </span>
-                  <FileText className="w-4 h-4 text-slate-400 group-hover:text-teal-600 transition-colors" />
-                </div>
-                <h3 className="text-xs font-bold text-slate-900">Form 16 (Part A & B)</h3>
-                <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                  Employer TDS certificate, salary breakup, standard deduction & Chapter VI-A.
-                </p>
-              </div>
+            {(() => {
+              const isPresent = activeClientDocs.some((d) => d.category === 'Form 16')
+              return (
+                <div className={`bg-white rounded-xl border p-4 transition-colors flex flex-col justify-between group ${
+                  isPresent ? 'border-teal-300 bg-teal-50/10' : 'border-dashed border-slate-300 hover:border-teal-500'
+                }`}>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                        isPresent ? 'bg-teal-100 text-teal-800 border-teal-300' : 'bg-slate-100 text-slate-700 border-slate-200'
+                      }`}>
+                        {isPresent ? 'Present ✓' : 'Mandatory'}
+                      </span>
+                      <FileText className={`w-4 h-4 ${isPresent ? 'text-teal-600' : 'text-slate-400 group-hover:text-teal-600'} transition-colors`} />
+                    </div>
+                    <h3 className="text-xs font-bold text-slate-900">Form 16 (Part A & B)</h3>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                      Employer TDS certificate, salary breakup, standard deduction & Chapter VI-A.
+                    </p>
+                  </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <button
-                  onClick={() => handleSimulateDrop('Form 16', 'Salary Certificate (Part A & B)', 'Form16_PartAB.pdf')}
-                  className="w-full py-1.5 px-2.5 rounded-lg bg-slate-50 hover:bg-teal-50 text-slate-700 hover:text-teal-700 font-semibold text-xs border border-slate-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Upload Form 16</span>
-                </button>
-              </div>
-            </div>
+                  <div className="mt-4 pt-3 border-t border-slate-100">
+                    <button
+                      onClick={() => handleSimulateDrop('Form 16', 'Salary Certificate (Part A & B)', 'Form16_PartAB.pdf')}
+                      className={`w-full py-1.5 px-2.5 rounded-lg font-semibold text-xs border transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                        isPresent
+                          ? 'bg-teal-50 hover:bg-teal-100 text-teal-800 border-teal-200'
+                          : 'bg-slate-50 hover:bg-teal-50 text-slate-700 hover:text-teal-700 border-slate-200'
+                      }`}
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{isPresent ? 'Upload Additional Form 16' : 'Upload Form 16'}</span>
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Dropzone 2: Form 26AS */}
-            <div className="bg-white rounded-xl border border-dashed border-slate-300 p-4 hover:border-teal-500 transition-colors flex flex-col justify-between group">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                    Tax Credit
-                  </span>
-                  <FileCheck2 className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
-                </div>
-                <h3 className="text-xs font-bold text-slate-900">Form 26AS</h3>
-                <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                  Annual Tax Credit Statement from TRACES. Employer TDS, 194A bank interest, dividend TDS.
-                </p>
-              </div>
+            {(() => {
+              const isPresent = activeClientDocs.some((d) => d.category === 'Form 26AS')
+              return (
+                <div className={`bg-white rounded-xl border p-4 transition-colors flex flex-col justify-between group ${
+                  isPresent ? 'border-blue-300 bg-blue-50/10' : 'border-dashed border-slate-300 hover:border-blue-500'
+                }`}>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                        isPresent ? 'bg-blue-100 text-blue-800 border-blue-300' : 'bg-slate-100 text-slate-700 border-slate-200'
+                      }`}>
+                        {isPresent ? 'Present ✓' : 'Tax Credit'}
+                      </span>
+                      <FileCheck2 className={`w-4 h-4 ${isPresent ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-600'} transition-colors`} />
+                    </div>
+                    <h3 className="text-xs font-bold text-slate-900">Form 26AS</h3>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                      Annual Tax Credit Statement from TRACES. Employer TDS, 194A bank interest, dividend TDS.
+                    </p>
+                  </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <button
-                  onClick={() => handleSimulateDrop('Form 26AS', 'Tax Credit Statement', 'Form26AS_AY2025-26.pdf')}
-                  className="w-full py-1.5 px-2.5 rounded-lg bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 font-semibold text-xs border border-slate-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Upload Form 26AS</span>
-                </button>
-              </div>
-            </div>
+                  <div className="mt-4 pt-3 border-t border-slate-100">
+                    <button
+                      onClick={() => handleSimulateDrop('Form 26AS', 'Tax Credit Statement', 'Form26AS_AY2025-26.pdf')}
+                      className={`w-full py-1.5 px-2.5 rounded-lg font-semibold text-xs border transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                        isPresent
+                          ? 'bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-200'
+                          : 'bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200'
+                      }`}
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{isPresent ? 'Upload Additional 26AS' : 'Upload Form 26AS'}</span>
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Dropzone 3: AIS / TIS */}
-            <div className="bg-white rounded-xl border border-dashed border-slate-300 p-4 hover:border-teal-500 transition-colors flex flex-col justify-between group">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
-                    Comprehensive
-                  </span>
-                  <Sparkles className="w-4 h-4 text-slate-400 group-hover:text-purple-600 transition-colors" />
-                </div>
-                <h3 className="text-xs font-bold text-slate-900">AIS & TIS Statement</h3>
-                <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                  Annual Information Statement. SFT bank savings interest, stock/mutual fund sales, dividends.
-                </p>
-              </div>
+            {(() => {
+              const isPresent = activeClientDocs.some((d) => d.category === 'AIS / TIS')
+              return (
+                <div className={`bg-white rounded-xl border p-4 transition-colors flex flex-col justify-between group ${
+                  isPresent ? 'border-purple-300 bg-purple-50/10' : 'border-dashed border-slate-300 hover:border-purple-500'
+                }`}>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                        isPresent ? 'bg-purple-100 text-purple-800 border-purple-300' : 'bg-slate-100 text-slate-700 border-slate-200'
+                      }`}>
+                        {isPresent ? 'Present ✓' : 'Comprehensive'}
+                      </span>
+                      <Sparkles className={`w-4 h-4 ${isPresent ? 'text-purple-600' : 'text-slate-400 group-hover:text-purple-600'} transition-colors`} />
+                    </div>
+                    <h3 className="text-xs font-bold text-slate-900">AIS & TIS Statement</h3>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                      Annual Information Statement. SFT bank savings interest, stock/mutual fund sales, dividends.
+                    </p>
+                  </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <button
-                  onClick={() => handleSimulateDrop('AIS / TIS', 'Annual Information Statement', 'AIS_TIS_Summary.pdf')}
-                  className="w-full py-1.5 px-2.5 rounded-lg bg-slate-50 hover:bg-purple-50 text-slate-700 hover:text-purple-700 font-semibold text-xs border border-slate-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Upload AIS / TIS</span>
-                </button>
-              </div>
-            </div>
+                  <div className="mt-4 pt-3 border-t border-slate-100">
+                    <button
+                      onClick={() => handleSimulateDrop('AIS / TIS', 'Annual Information Statement', 'AIS_TIS_Summary.pdf')}
+                      className={`w-full py-1.5 px-2.5 rounded-lg font-semibold text-xs border transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                        isPresent
+                          ? 'bg-purple-50 hover:bg-purple-100 text-purple-800 border-purple-200'
+                          : 'bg-slate-50 hover:bg-purple-50 text-slate-700 hover:text-purple-700 border-slate-200'
+                      }`}
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{isPresent ? 'Upload Additional AIS' : 'Upload AIS / TIS'}</span>
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Dropzone 4: Bank Statements & Broker Capital Gains */}
-            <div className="bg-white rounded-xl border border-dashed border-slate-300 p-4 hover:border-teal-500 transition-colors flex flex-col justify-between group">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
-                    Supporting
-                  </span>
-                  <KeyRound className="w-4 h-4 text-slate-400 group-hover:text-amber-600 transition-colors" />
-                </div>
-                <h3 className="text-xs font-bold text-slate-900">Bank & Broker P&L</h3>
-                <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                  Section 24(b) Home loan certificate, Zerodha/Groww P&L, 80D health insurance receipts.
-                </p>
-              </div>
+            {(() => {
+              const isPresent = activeClientDocs.some((d) => d.category === 'Bank Statement / Certificate' || d.category === 'Supporting Schedule')
+              return (
+                <div className={`bg-white rounded-xl border p-4 transition-colors flex flex-col justify-between group ${
+                  isPresent ? 'border-amber-300 bg-amber-50/10' : 'border-dashed border-slate-300 hover:border-amber-500'
+                }`}>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                        isPresent ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-100 text-slate-700 border-slate-200'
+                      }`}>
+                        {isPresent ? 'Present ✓' : 'Supporting'}
+                      </span>
+                      <KeyRound className={`w-4 h-4 ${isPresent ? 'text-amber-600' : 'text-slate-400 group-hover:text-amber-600'} transition-colors`} />
+                    </div>
+                    <h3 className="text-xs font-bold text-slate-900">Bank & Broker P&L</h3>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                      Section 24(b) Home loan certificate, Zerodha/Groww P&L, 80D health insurance receipts.
+                    </p>
+                  </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <button
-                  onClick={() => handleSimulateDrop('Bank Statement / Certificate', 'Sec 24b Interest Certificate', 'HomeLoan_Interest_Cert.pdf')}
-                  className="w-full py-1.5 px-2.5 rounded-lg bg-slate-50 hover:bg-amber-50 text-slate-700 hover:text-amber-700 font-semibold text-xs border border-slate-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Upload Cert / P&L</span>
-                </button>
-              </div>
-            </div>
+                  <div className="mt-4 pt-3 border-t border-slate-100">
+                    <button
+                      onClick={() => handleSimulateDrop('Bank Statement / Certificate', 'Sec 24b Interest Certificate', 'HomeLoan_Interest_Cert.pdf')}
+                      className={`w-full py-1.5 px-2.5 rounded-lg font-semibold text-xs border transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                        isPresent
+                          ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
+                          : 'bg-slate-50 hover:bg-amber-50 text-slate-700 hover:text-amber-700 border-slate-200'
+                      }`}
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{isPresent ? 'Upload Additional P&L' : 'Upload Cert / P&L'}</span>
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
 
           {/* Active Client's Uploaded Files Table */}
