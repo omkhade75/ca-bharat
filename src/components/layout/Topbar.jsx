@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Search,
   Bell,
@@ -8,7 +9,8 @@ import {
   AlertTriangle,
   Info,
   ChevronDown,
-  Menu
+  Menu,
+  Globe
 } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { formatINR } from '../../utils/formatters'
@@ -132,6 +134,16 @@ export default function Topbar({ onToggleMobileMenu = () => {} }) {
           </span>
         </div>
 
+        {/* Public Landing Page Link */}
+        <Link
+          to="/"
+          title="View Public Landing Page"
+          className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-blue-700 bg-slate-50 hover:bg-blue-50/80 rounded-lg transition-colors border border-slate-200 hover:border-blue-300 cursor-pointer"
+        >
+          <Globe className="w-3.5 h-3.5 text-blue-600" />
+          <span>Landing Page</span>
+        </Link>
+
         {/* Reset Demo Data Button */}
         <button
           onClick={handleReset}
@@ -239,6 +251,14 @@ export default function Topbar({ onToggleMobileMenu = () => {} }) {
                 </div>
               </div>
               <div className="border-t border-slate-100 pt-1">
+                <Link
+                  to="/"
+                  onClick={() => setShowUserMenu(false)}
+                  className="w-full text-left px-3 py-1.5 text-blue-600 hover:bg-blue-50 font-medium flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Public Landing Page</span>
+                </Link>
                 <button
                   onClick={() => {
                     handleReset()

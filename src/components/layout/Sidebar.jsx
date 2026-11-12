@@ -11,7 +11,8 @@ import {
   ShieldCheck,
   ChevronDown,
   Building2,
-  X
+  X,
+  Globe
 } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import Logo from '../common/Logo'
@@ -21,7 +22,7 @@ export default function Sidebar({ isMobileOpen = false, onCloseMobile = () => {}
 
   const navItems = [
     {
-      to: '/',
+      to: '/dashboard',
       label: 'Mission Control',
       icon: LayoutDashboard,
       badge: null,
@@ -66,6 +67,11 @@ export default function Sidebar({ isMobileOpen = false, onCloseMobile = () => {}
       to: '/help',
       label: 'Help & Compliance',
       icon: HelpCircle,
+    },
+    {
+      to: '/',
+      label: 'Public Landing Page',
+      icon: Globe,
     },
   ]
 
