@@ -15,7 +15,15 @@ import {
   Menu,
   X,
   ArrowUpRight,
-  Check
+  Check,
+  AlertCircle,
+  HelpCircle,
+  UserCheck,
+  FolderUp,
+  FileSearch,
+  CheckSquare,
+  FileCode,
+  LineChart
 } from 'lucide-react'
 import Logo from '../../common/Logo'
 
@@ -27,16 +35,30 @@ export default function LandingPage() {
     navigate(path)
   }
 
+  // 10-Stage Lifecycle Workflow Journey
+  const workflowSteps = [
+    { num: '01', title: 'Client Onboarding', desc: 'Capture taxpayer master profile & PAN category', icon: UserCheck },
+    { num: '02', title: 'Consent Workflow', desc: 'Simulated DPDP notice & digital authorization', icon: ShieldCheck },
+    { num: '03', title: 'Document Upload', desc: 'Form 16, TRACES 26AS, AIS/TIS & P&L dropzones', icon: FolderUp },
+    { num: '04', title: 'AI Extraction', desc: 'Simulated OCR with coordinate bounding citations', icon: FileSearch },
+    { num: '05', title: 'Data Validation', desc: 'Cross-document format & missing schedule checks', icon: CheckSquare },
+    { num: '06', title: 'Reconciliation', desc: '3-way audit matrix detecting potential mismatches', icon: Scale },
+    { num: '07', title: 'Tax Calculation', desc: 'Sample deterministic Old vs New regime optimizer', icon: Cpu },
+    { num: '08', title: 'Human CA Review', desc: 'ICAI-aligned pre-filing checklist & demo sign-off', icon: Award },
+    { num: '09', title: 'Filing-Ready Output', desc: 'Sample CBDT-compatible ITR JSON schema export', icon: FileCode },
+    { num: '10', title: 'Financial Insights', desc: '2-page Visual Eye-Opener & wealth heuristics', icon: LineChart },
+  ]
+
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-slate-900 font-sans selection:bg-amber-200 selection:text-amber-950">
-      {/* 1. TOP ANNOUNCEMENT BAR (WARM SAND / GOLD TINT) */}
+      {/* 1. TOP ANNOUNCEMENT TICKER (PROTOTYPE TRANSPARENCY) */}
       <div className="bg-gradient-to-r from-amber-50 via-orange-50/60 to-amber-100/70 border-b border-amber-200/80 text-xs py-2 px-4 text-center text-amber-950 flex items-center justify-center gap-2">
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white text-amber-900 font-bold text-[11px] border border-amber-300 shadow-2xs">
-          AY 2025-26 Live Prototype
+          Frontend Prototype Demonstration
         </span>
         <span className="hidden sm:inline text-amber-300">•</span>
         <span className="text-amber-950 font-medium">
-          Built for Indian Chartered Accountants • Conforms to Finance Act 2024 & Section 115BAC
+          CA-Led Tax Workflow Automation & Personal Finance Intelligence • Sample Finance Act 2024 Computations
         </span>
         <button
           onClick={() => handleLaunchApp('/dashboard')}
@@ -59,9 +81,9 @@ export default function LandingPage() {
           </div>
 
           {/* Desktop Nav Links */}
-          <nav className="hidden lg:flex items-center gap-7 text-xs font-semibold text-slate-700">
+          <nav className="hidden lg:flex items-center gap-6 text-xs font-semibold text-slate-700">
             <a href="#engines" className="hover:text-blue-700 transition-colors">The Two Engines</a>
-            <a href="#how-it-works" className="hover:text-blue-700 transition-colors">Workflow</a>
+            <a href="#workflow" className="hover:text-blue-700 transition-colors">10-Step Journey</a>
             <a href="#reconciliation" className="hover:text-blue-700 transition-colors">3-Way Audit</a>
             <a href="#eye-opener" className="hover:text-blue-700 transition-colors">Financial Eye-Opener</a>
             <a href="#for-ca-firms" className="hover:text-blue-700 transition-colors">Advisory Tiers</a>
@@ -108,11 +130,11 @@ export default function LandingPage() {
               The Two Engines
             </a>
             <a
-              href="#how-it-works"
+              href="#workflow"
               onClick={() => setMobileMenuOpen(false)}
               className="px-3 py-2 text-slate-700 hover:bg-slate-50 rounded-lg"
             >
-              Workflow
+              10-Step Workflow Journey
             </a>
             <a
               href="#reconciliation"
@@ -157,19 +179,18 @@ export default function LandingPage() {
         )}
       </header>
 
-      {/* 3. HERO SECTION (WARM PASTEL GRADIENTS, AMBIENT DEPTH) */}
+      {/* 3. HERO SECTION (PRODUCT VISION & ALIGNMENT) */}
       <section className="relative overflow-hidden pt-12 pb-16 md:pt-20 md:pb-24 border-b border-amber-200/50 bg-gradient-to-b from-amber-50/60 via-[#FDFBF7] to-blue-50/40">
-        {/* Soft atmospheric background color splashes */}
         <div className="absolute top-6 left-1/4 w-80 h-80 bg-amber-200/25 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute top-12 right-1/4 w-80 h-80 bg-blue-200/25 rounded-full blur-3xl pointer-events-none" />
 
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6 relative z-10">
-          {/* Subtle Category Pill with Warm Border */}
+          {/* Category Pill */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/90 backdrop-blur-xs border border-amber-200 text-slate-800 text-xs shadow-2xs">
             <span className="w-2 h-2 rounded-full bg-emerald-600" />
-            <span className="font-bold text-slate-900">CA-Led Tax & Personal Finance Platform</span>
+            <span className="font-bold text-slate-900">CA-Led Tax Workflow & Personal Finance Platform</span>
             <span className="text-amber-400">|</span>
-            <span className="text-amber-900 font-semibold">AY 2025-26</span>
+            <span className="text-amber-900 font-semibold">AY 2025-26 Prototype</span>
           </div>
 
           {/* Main Headline */}
@@ -180,12 +201,12 @@ export default function LandingPage() {
             </span>
           </h1>
 
-          {/* Sub-headline */}
+          {/* Sub-headline: Product Vision */}
           <p className="text-base sm:text-lg text-slate-700 font-normal leading-relaxed max-w-2xl mx-auto">
-            <strong className="text-slate-900 font-semibold">"File better. Advise all year."</strong> Transform seasonal, commoditized ITR filing into year-round wealth advisory. Deterministic statutory tax calculations, 3-way reconciliation (Form 16 vs 26AS vs AIS), and Chartered Accountant oversight.
+            <strong className="text-slate-900 font-semibold">"File better. Advise all year."</strong> Transform seasonal ITR compliance into the natural entry point for continuous personal wealth advisory. Two connected engines powered by AI-assisted document intake, 3-way reconciliation (Form 16 vs 26AS vs AIS), deterministic tax computations, and mandatory Chartered Accountant supervision.
           </p>
 
-          {/* Primary Action Buttons */}
+          {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             <button
               onClick={() => handleLaunchApp('/dashboard')}
@@ -204,22 +225,22 @@ export default function LandingPage() {
             </button>
           </div>
 
-          {/* 4 Distinct Soft-Tinted Trust Indicators */}
+          {/* 4 Accurately Labeled Trust Badges */}
           <div className="pt-8 grid grid-cols-2 sm:grid-cols-4 gap-3 text-left max-w-4xl mx-auto">
             <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/80 shadow-2xs">
               <div className="flex items-center gap-1.5 text-xs font-bold text-blue-950">
                 <CheckCircle2 className="w-3.5 h-3.5 text-blue-700 shrink-0" />
-                <span>Zero LLM Math</span>
+                <span>Deterministic Rules</span>
               </div>
-              <p className="text-[11px] text-blue-800 mt-1">100% deterministic rules engine conforming to Finance Act 2024</p>
+              <p className="text-[11px] text-blue-800 mt-1">Sample rule-based math conforming to Finance Act 2024 principles; zero LLM arithmetic</p>
             </div>
 
             <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 shadow-2xs">
               <div className="flex items-center gap-1.5 text-xs font-bold text-amber-950">
                 <CheckCircle2 className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                <span>DPDP Act Concept</span>
+                <span>Consent Concept</span>
               </div>
-              <p className="text-[11px] text-amber-800 mt-1">Digital consent ledger with verified client IP & purpose limitation</p>
+              <p className="text-[11px] text-amber-800 mt-1">Demonstrates DPDP notice lifecycle, purpose limitation & simulated sandbox IP tokens</p>
             </div>
 
             <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 shadow-2xs">
@@ -227,20 +248,20 @@ export default function LandingPage() {
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
                 <span>Mandatory CA Approval</span>
               </div>
-              <p className="text-[11px] text-emerald-800 mt-1">Human-in-the-loop sign-off with simulated DSC digest & checklist</p>
+              <p className="text-[11px] text-emerald-800 mt-1">Human-in-the-loop review aligned with ICAI standards; simulated DSC sign-off gateway</p>
             </div>
 
             <div className="p-3.5 rounded-xl bg-purple-50/70 border border-purple-200/80 shadow-2xs">
               <div className="flex items-center gap-1.5 text-xs font-bold text-purple-950">
                 <CheckCircle2 className="w-3.5 h-3.5 text-purple-700 shrink-0" />
-                <span>Government Ready</span>
+                <span>Filing Export Demo</span>
               </div>
-              <p className="text-[11px] text-purple-800 mt-1">Exports CBDT-compliant ITR-1, ITR-2 & ITR-4 JSON schemas</p>
+              <p className="text-[11px] text-purple-800 mt-1">Generates sample filing-ready ITR-1, ITR-2 & ITR-4 JSON schemas (no live government connection)</p>
             </div>
           </div>
         </div>
 
-        {/* 4. LIGHT INTERACTIVE HERO PREVIEW CARD (TINTED SURFACES) */}
+        {/* 4. LIGHT INTERACTIVE HERO PREVIEW CARD */}
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 relative z-10">
           <div className="rounded-2xl bg-white border border-slate-300 shadow-lg overflow-hidden">
             {/* Top Window Bar */}
@@ -259,9 +280,9 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Three Soft-Tinted Cards Inside Preview */}
+            {/* Three Cards Inside Preview */}
             <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-3 gap-4 bg-gradient-to-b from-slate-50/80 to-[#FAF8F5]">
-              {/* Card 1: Teal/Mint Tint */}
+              {/* Card 1 */}
               <div
                 onClick={() => handleLaunchApp('/tax-reconciliation')}
                 className="p-4.5 rounded-xl bg-gradient-to-br from-teal-50/80 via-white to-emerald-50/40 border border-teal-200 hover:border-teal-400 hover:shadow-xs transition-all cursor-pointer group space-y-2.5"
@@ -276,22 +297,22 @@ export default function LandingPage() {
                   3-Way Cross-Reconciliation Matrix
                 </h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Automatically aligns Form 16 Part A/B against TRACES Form 26AS and AIS/TIS. Catches hidden savings interest and flags capital gains.
+                  Automatically aligns Form 16 Part A/B against TRACES Form 26AS and AIS/TIS. Flags unreported savings interest and capital gains for CA review.
                 </p>
                 <div className="p-2 rounded-lg bg-white/90 border border-teal-200/80 flex items-center justify-between text-xs">
-                  <span className="text-slate-600 text-[11px] font-medium">Audit Detection:</span>
-                  <span className="text-teal-800 font-bold text-[11px]">2 Items Reconciled ✓</span>
+                  <span className="text-slate-600 text-[11px] font-medium">Discrepancy Check:</span>
+                  <span className="text-teal-800 font-bold text-[11px]">2 Items Identified for Review ✓</span>
                 </div>
               </div>
 
-              {/* Card 2: Warm Honey/Amber Tint */}
+              {/* Card 2 */}
               <div
                 onClick={() => handleLaunchApp('/tax-reconciliation')}
                 className="p-4.5 rounded-xl bg-gradient-to-br from-amber-50/80 via-white to-orange-50/40 border border-amber-200 hover:border-amber-400 hover:shadow-xs transition-all cursor-pointer group space-y-2.5"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900 bg-amber-100/70 px-2 py-0.5 rounded border border-amber-300">
-                    Finance Act 2024
+                    Sample Calculation
                   </span>
                   <ArrowUpRight className="w-3.5 h-3.5 text-amber-700 group-hover:text-amber-900 transition-colors" />
                 </div>
@@ -299,22 +320,22 @@ export default function LandingPage() {
                   Deterministic Regime Optimizer
                 </h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Side-by-side computation under Old Regime vs Section 115BAC New Regime with ₹75,000 standard deduction and 87A rebate.
+                  Side-by-side sample computation under Old Regime vs Section 115BAC New Regime with standard deduction & rebate. Requires CA validation.
                 </p>
                 <div className="p-2 rounded-lg bg-white/90 border border-amber-200/80 flex items-center justify-between text-xs">
-                  <span className="text-slate-600 text-[11px] font-medium">Active Client:</span>
+                  <span className="text-slate-600 text-[11px] font-medium">Sample Outcome:</span>
                   <span className="text-emerald-700 font-bold text-[11px]">New Regime saves ₹28,600</span>
                 </div>
               </div>
 
-              {/* Card 3: Lavender/Purple Tint */}
+              {/* Card 3 */}
               <div
                 onClick={() => handleLaunchApp('/insights-delivery')}
                 className="p-4.5 rounded-xl bg-gradient-to-br from-purple-50/80 via-white to-indigo-50/40 border border-purple-200 hover:border-purple-400 hover:shadow-xs transition-all cursor-pointer group space-y-2.5"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-purple-900 bg-purple-100/70 px-2 py-0.5 rounded border border-purple-300">
-                    Engine 2 • Wealth Advisory
+                    Engine 2 • Wealth Insights
                   </span>
                   <ArrowUpRight className="w-3.5 h-3.5 text-purple-700 group-hover:text-purple-900 transition-colors" />
                 </div>
@@ -322,11 +343,11 @@ export default function LandingPage() {
                   2-Page Financial Eye-Opener
                 </h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  The client-facing report delivered with their ITR acknowledgment: derived living expenses, effective tax rate, and idle cash sweep heuristics.
+                  The client delivery report accompanying return summaries: derived living expenses, effective tax rate, and idle cash heuristics for CA-led advisory.
                 </p>
                 <div className="p-2 rounded-lg bg-white/90 border border-purple-200/80 flex items-center justify-between text-xs">
-                  <span className="text-slate-600 text-[11px] font-medium">Advisory Tier:</span>
-                  <span className="text-purple-800 font-bold text-[11px]">Gold Retainer @ ₹499/mo</span>
+                  <span className="text-slate-600 text-[11px] font-medium">Sample Retainer:</span>
+                  <span className="text-purple-800 font-bold text-[11px]">Illustrative ₹499/mo Model</span>
                 </div>
               </div>
             </div>
@@ -345,60 +366,64 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 5. THE TWO ENGINES (RICH SOFT BLUE & WARM AMBER TINTS) */}
+      {/* 5. THE TWO CONNECTED ENGINES (DETAILED SYSTEMIC EXPLANATION) */}
       <section id="engines" className="py-16 md:py-24 bg-gradient-to-b from-blue-50/30 via-slate-50/50 to-amber-50/30 border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto space-y-3 mb-14">
             <span className="text-[11px] font-bold uppercase tracking-wider text-blue-900 bg-blue-100/70 px-3 py-1 rounded-full border border-blue-200 shadow-2xs">
-              The Dual-Engine Architecture
+              The Two Connected Engines
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Two Integrated Engines for Modern CA Practices
+              From Seasonal ITR Filing to Ongoing Client Advisory
             </h2>
             <p className="text-xs sm:text-sm text-slate-700">
-              Most tax utilities stop once the ITR JSON is generated. CA Bharat AI turns seasonal filing data into ongoing high-value client advisory.
+              Tax compliance serves as the natural entry point. CA Bharat AI links tax preparation directly into year-round financial insight with strict human CA supervision.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* ENGINE 1: AZURE / ICE TINT */}
+            {/* ENGINE 1: ITR PREPARATION & TAX WORKFLOW AUTOMATION */}
             <div className="p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-blue-50/80 via-white to-slate-50 border border-blue-200 shadow-xs space-y-5">
               <div className="flex items-center justify-between">
                 <div className="w-11 h-11 rounded-xl bg-blue-100 border border-blue-300 flex items-center justify-center text-blue-700 shadow-2xs">
                   <FileCheck2 className="w-5 h-5" />
                 </div>
                 <span className="px-3 py-1 rounded-full bg-blue-100/80 text-blue-900 border border-blue-200 text-[11px] font-bold">
-                  Engine 1: Seasonal Compliance
+                  Engine 1: ITR Preparation
                 </span>
               </div>
 
               <div>
                 <h3 className="text-xl font-bold text-slate-900">Tax Workflow Automation</h3>
                 <p className="text-xs text-slate-600 mt-1">
-                  Reduces preparation and audit time from 45 minutes to under 5 minutes per taxpayer return during peak filing season.
+                  Streamlines document intake, extraction, cross-validation, 3-way reconciliation, tax calculation, and human CA sign-off.
                 </p>
               </div>
 
               <div className="space-y-3 text-xs text-slate-700">
                 <div className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
-                  <span><strong>Multi-Document Vault:</strong> Dropzones for Form 16 (Part A & B), TRACES 26AS, AIS/TIS, and Broker P&L.</span>
+                  <span><strong>Document Intake:</strong> Dropzones for Form 16 (Part A & B), TRACES Form 26AS, AIS/TIS, and Broker Capital Gains P&L.</span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
-                  <span><strong>Bounding-Box OCR Citations:</strong> Line numbers and coordinate citations tie directly back to source PDF pages.</span>
+                  <span><strong>Simulated OCR Extraction:</strong> Visual coordinate bounding citations link extracted fields back to source document pages for rapid CA inspection.</span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
-                  <span><strong>3-Way Automated Reconciliation:</strong> Compares employer Form 16 against CBDT TRACES 26AS and AIS/TIS data.</span>
+                  <span><strong>Cross-Document Validation:</strong> Automated format checks and schedule mismatch alerts identify reporting gaps before filing.</span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
-                  <span><strong>Deterministic Section 115BAC Optimizer:</strong> 100% rule-based slab comparisons with zero probabilistic guessing.</span>
+                  <span><strong>3-Way Reconciliation Matrix:</strong> Cross-checks employer Form 16 against CBDT TRACES 26AS and AIS/TIS to catch unreported income.</span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
-                  <span><strong>Pre-Filing Checklist & Simulated DSC Sign-Off:</strong> Ensures statutory ICAI compliance prior to JSON export.</span>
+                  <span><strong>Deterministic Tax Engine:</strong> Sample mathematical comparison of Old vs New Regime slabs u/s 115BAC (Finance Act 2024 principles) requiring CA verification.</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <Check className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
+                  <span><strong>Mandatory CA Review & Sign-Off:</strong> Pre-filing verification checklist and demonstration DSC hash generation before exporting filing-ready JSON.</span>
                 </div>
               </div>
 
@@ -407,49 +432,53 @@ export default function LandingPage() {
                   onClick={() => handleLaunchApp('/document-intelligence')}
                   className="text-xs font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1 cursor-pointer"
                 >
-                  Explore Document Vault & OCR →
+                  Explore Document Vault & OCR Demo →
                 </button>
               </div>
             </div>
 
-            {/* ENGINE 2: WARM HONEY / AMBER TINT */}
+            {/* ENGINE 2: PERSONAL FINANCE INSIGHT & ADVISORY */}
             <div className="p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-amber-50/80 via-white to-orange-50/30 border border-amber-200 shadow-xs space-y-5">
               <div className="flex items-center justify-between">
                 <div className="w-11 h-11 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 shadow-2xs">
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <span className="px-3 py-1 rounded-full bg-amber-100/80 text-amber-950 border border-amber-300 text-[11px] font-bold">
-                  Engine 2: Year-Round Wealth
+                  Engine 2: Personal Finance Insight
                 </span>
               </div>
 
               <div>
                 <h3 className="text-xl font-bold text-slate-900">Personal Finance Intelligence</h3>
                 <p className="text-xs text-slate-600 mt-1">
-                  Delivers actionable wealth heuristics and executive financial snapshots alongside tax return acknowledgments.
+                  Derives annual financial snapshots, savings analysis, and health indicators for continuous, professionally authorised advisory.
                 </p>
               </div>
 
               <div className="space-y-3 text-xs text-slate-700">
                 <div className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                  <span><strong>2-Page Visual Financial Eye-Opener:</strong> Executive summary of earnings, tax efficiency, and derived living expenses.</span>
+                  <span><strong>Annual Financial Snapshot:</strong> Consolidated annual overview of earnings, direct taxes deposited, savings, and net wealth indicators.</span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                  <span><strong>Living Expenses Formula:</strong> Derived via <code className="bg-amber-100/60 px-1 py-0.5 rounded text-amber-950 font-mono text-[11px]">Gross Inflow − Taxes − Documented Savings</code>.</span>
+                  <span><strong>Income & Savings Analysis:</strong> Transparent living expenses formula: <code className="bg-amber-100/60 px-1 py-0.5 rounded text-amber-950 font-mono text-[11px]">Gross Inflow − Taxes − Documented Savings</code>.</span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                  <span><strong>Section 80CCD(1B) Tier-1 NPS Advisory:</strong> Identifies missed ₹50k deduction opportunity yielding potential ~₹10.4k relief.</span>
+                  <span><strong>Section 80CCD(1B) NPS Opportunity:</strong> Illustrative tax-saving planning heuristic subject to applicable tax regime selection and CA review.</span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                  <span><strong>Idle Cash Sweep Analysis:</strong> Estimates low-yield savings balance and models potential interest gains in 7% sweep FDs.</span>
+                  <span><strong>Idle Cash Sweep Modeling:</strong> Estimates low-yield savings balance and models potential additional interest in 7% auto-sweep deposits.</span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                  <span><strong>Quarterly Advance Tax Compliance Check:</strong> Section 234C timing verification protecting clients from interest notices.</span>
+                  <span><strong>Section 234C Advance Tax Checks:</strong> Compliance timing verification on realized capital gains protecting clients from automated interest notices.</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <Check className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <span><strong>CA-Led Advisory Delivery:</strong> All wealth suggestions are illustrative heuristics designed for Chartered Accountant authorization—never autonomous AI decisions.</span>
                 </div>
               </div>
 
@@ -466,83 +495,71 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 6. HOW IT WORKS (4 STEPS WITH TINTED CHIPS) */}
-      <section id="how-it-works" className="py-16 md:py-24 bg-white border-b border-slate-200">
+      {/* 6. COMPLETE 10-STAGE WORKFLOW JOURNEY */}
+      <section id="workflow" className="py-16 md:py-24 bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto space-y-3 mb-14">
+          <div className="text-center max-w-2xl mx-auto space-y-3 mb-12">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-              Simple 4-Step Lifecycle
+              End-to-End CA Workflow
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              From Client Invite to Year-Round Advisory
+              The Complete 10-Stage Advisory Journey
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
-              An intuitive end-to-end workflow designed for busy CA firms and their article assistants.
+              From client intake and simulated consent to filing-ready schema exports and financial insights.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <div className="p-5 rounded-xl bg-gradient-to-b from-blue-50/50 to-white border border-blue-200/80 space-y-2.5 shadow-2xs">
-              <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                01
-              </div>
-              <h3 className="text-sm font-bold text-slate-900">Onboard & Consent</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Add taxpayer profile and dispatch a simulated WhatsApp invitation link. Consent logged with client IP and purpose limitation hash under DPDP guidelines.
-              </p>
-            </div>
+          {/* 10 Workflow Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            {workflowSteps.map((step) => {
+              const Icon = step.icon
+              return (
+                <div
+                  key={step.num}
+                  className="p-4 rounded-xl bg-gradient-to-b from-slate-50 to-white border border-slate-200/90 shadow-2xs space-y-2 hover:border-blue-300 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 font-bold text-xs flex items-center justify-center">
+                      {step.num}
+                    </span>
+                    <Icon className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <h3 className="text-xs font-bold text-slate-900">{step.title}</h3>
+                  <p className="text-[11px] text-slate-600 leading-snug">{step.desc}</p>
+                </div>
+              )
+            })}
+          </div>
 
-            <div className="p-5 rounded-xl bg-gradient-to-b from-indigo-50/50 to-white border border-indigo-200/80 space-y-2.5 shadow-2xs">
-              <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                02
-              </div>
-              <h3 className="text-sm font-bold text-slate-900">Dropzone Ingestion</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Drop Form 16, TRACES 26AS, AIS/TIS, and P&L files into designated vaults. OCR layout parser maps line items to visual coordinate bounding citations.
-              </p>
-            </div>
-
-            <div className="p-5 rounded-xl bg-gradient-to-b from-teal-50/50 to-white border border-teal-200/80 space-y-2.5 shadow-2xs">
-              <div className="w-9 h-9 rounded-lg bg-teal-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                03
-              </div>
-              <h3 className="text-sm font-bold text-slate-900">Reconcile & Optimize</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Review automated 3-way matrix. Accept or resolve flagged interest or dividend discrepancies, then compare Old vs New tax regime slabs.
-              </p>
-            </div>
-
-            <div className="p-5 rounded-xl bg-gradient-to-b from-amber-50/50 to-white border border-amber-200/80 space-y-2.5 shadow-2xs">
-              <div className="w-9 h-9 rounded-lg bg-amber-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                04
-              </div>
-              <h3 className="text-sm font-bold text-slate-900">Sign-Off & Eye-Opener</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Complete pre-filing checklist, approve with demo DSC digest, export CBDT ITR JSON, and dispatch the 2-Page Eye-Opener report via WhatsApp.
-              </p>
-            </div>
+          {/* Important Workflow Disclaimer */}
+          <div className="mt-8 p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/90 text-xs text-amber-950 flex items-start gap-2.5 max-w-3xl mx-auto">
+            <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <p className="leading-relaxed">
+              <strong>Prototype Demonstration Boundary:</strong> This frontend prototype demonstrates the complete workflow sequence and exports sample filing schemas. It does not perform actual government e-filing or establish live connections with the CBDT Income Tax Portal.
+            </p>
           </div>
         </div>
       </section>
 
-      {/* 7. 3-WAY RECONCILIATION HIGHLIGHT (SOFT TEAL/MINT TINT) */}
+      {/* 7. 3-WAY RECONCILIATION HIGHLIGHT (DISCREPANCY IDENTIFICATION) */}
       <section id="reconciliation" className="py-16 md:py-24 bg-gradient-to-b from-teal-50/30 via-slate-50/40 to-[#FDFBF7] border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             <div className="lg:col-span-5 space-y-5">
               <span className="text-[11px] font-bold uppercase tracking-wider text-teal-900 bg-teal-100/70 px-3 py-1 rounded-full border border-teal-300">
-                Eliminate Automated Notice Risks
+                Identify Potential Discrepancies
               </span>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
                 3-Way Cross-Audit Matrix: Form 16 vs 26AS vs AIS
               </h2>
               <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-                Taxpayers routinely omit savings bank interest or fail to report small capital gains. When the Income Tax Department's portal cross-checks their return against AIS, an automated notice is issued.
+                Taxpayers routinely omit savings bank interest or overlook small mutual fund capital gains. The reconciliation engine cross-references these reporting streams, helping the CA identify potential variances before return submission.
               </p>
               <div className="space-y-2.5 text-xs text-slate-800">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                  <span>Catches SFT-005 bank interest absent from Form 16</span>
+                  <span>Identifies SFT-005 bank interest absent from Form 16</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
@@ -550,7 +567,7 @@ export default function LandingPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                  <span>Verifies employer TDS matches TRACES Form 26AS credits</span>
+                  <span>Verifies employer TDS matches TRACES Form 26AS ledger credits</span>
                 </div>
               </div>
               <button
@@ -614,7 +631,7 @@ export default function LandingPage() {
               </div>
 
               <div className="p-3 rounded-lg bg-teal-50/60 border border-teal-200/80 text-[11px] text-teal-950 flex items-center justify-between">
-                <span>In the prototype, clicking <strong>"Accept & Add"</strong> adds ₹46,000 to Section 56(2) and recalculates tax.</span>
+                <span>In the prototype, clicking <strong>"Accept & Add"</strong> adds ₹46,000 to Section 56(2) and recalculates sample tax.</span>
                 <button
                   onClick={() => handleLaunchApp('/tax-reconciliation')}
                   className="px-2.5 py-1 rounded bg-teal-700 hover:bg-teal-600 text-white font-bold text-[10px]"
@@ -627,7 +644,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 8. 2-PAGE FINANCIAL EYE-OPENER (SOFT PURPLE & AMBER TINTS) */}
+      {/* 8. 2-PAGE FINANCIAL EYE-OPENER (SAMPLE ADVISORY ASSET) */}
       <section id="eye-opener" className="py-16 md:py-24 bg-gradient-to-b from-purple-50/30 via-white to-amber-50/20 border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto space-y-3 mb-14">
@@ -682,7 +699,7 @@ export default function LandingPage() {
                   <span className="font-bold text-amber-700">1.</span>
                   <div>
                     <strong className="text-slate-900">Section 80CCD(1B) NPS:</strong>
-                    <span className="text-slate-700 ml-1">Up to ₹50,000 additional deduction saving ~₹10,400 in direct tax.</span>
+                    <span className="text-slate-700 ml-1">Up to ₹50,000 additional deduction saving ~₹10,400 in direct tax (Old Regime).</span>
                   </div>
                 </div>
 
@@ -717,32 +734,32 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 9. ADVISORY TIERS & RETAINERS (WARM GOLD, SILVER & PURPLE) */}
+      {/* 9. ADVISORY TIERS & RETAINER CONCEPTS (ACCURATELY QUALIFIED) */}
       <section id="for-ca-firms" className="py-16 md:py-24 bg-[#FAF7F2] border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto space-y-3 mb-14">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-2xs">
-              Transform Your Practice
+              Advisory Tier Concepts
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Three Advisory Tiers for Your Clients
+              Three Advisory Tiers for Your Practice
             </h2>
             <p className="text-xs sm:text-sm text-slate-700">
-              Break free from the ₹1,500/return seasonal filing trap. Offer tiered client plans that produce predictable monthly recurring revenue.
+              Sample firm retainer concepts demonstrating how tax compliance links directly to continuous, CA-authorized personal finance advisory.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* SILVER */}
+            {/* SILVER: ANNUAL FINANCIAL OVERVIEW */}
             <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4 flex flex-col justify-between">
               <div className="space-y-3">
                 <span className="px-2.5 py-0.5 rounded bg-slate-100 text-slate-800 text-[11px] font-bold">Silver Tier</span>
-                <h3 className="text-lg font-bold text-slate-900">Annual Filing + Eye-Opener</h3>
+                <h3 className="text-lg font-bold text-slate-900">Annual Financial Overview</h3>
                 <div className="text-2xl font-extrabold text-slate-900 font-mono">
-                  ₹2,499 <span className="text-xs font-normal text-slate-500">/ return</span>
+                  ₹2,499* <span className="text-xs font-normal text-slate-500">/ return (Illustrative)</span>
                 </div>
                 <p className="text-xs text-slate-600">
-                  Ideal for salaried professionals seeking automated 3-way reconciliation and an executive personal financial snapshot.
+                  Annual compliance engagement delivering filing-ready schema exports and the 2-Page Visual Financial Eye-Opener snapshot.
                 </p>
                 <div className="space-y-2 pt-2 text-xs text-slate-700">
                   <div className="flex items-center gap-2">
@@ -751,11 +768,15 @@ export default function LandingPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-3.5 h-3.5 text-blue-700 shrink-0" />
-                    <span>3-Way Reconciliation Audit</span>
+                    <span>3-Way Reconciliation Matrix Audit</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-3.5 h-3.5 text-blue-700 shrink-0" />
-                    <span>2-Page Financial Eye-Opener</span>
+                    <span>Annual Financial Eye-Opener Snapshot</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                    <span>CA Partner Certified Review</span>
                   </div>
                 </div>
               </div>
@@ -768,27 +789,31 @@ export default function LandingPage() {
               </button>
             </div>
 
-            {/* GOLD (HERO TIER - WARM HONEY / AMBER) */}
+            {/* GOLD: MONTHLY CASH-FLOW & ADVANCE TAX ADVISORY */}
             <div className="p-6 rounded-2xl bg-gradient-to-b from-amber-50 via-yellow-50/50 to-white border-2 border-amber-400 shadow-md space-y-4 flex flex-col justify-between relative">
               <div className="space-y-3">
                 <span className="px-2.5 py-0.5 rounded-full bg-amber-200/80 text-amber-950 border border-amber-300 text-[11px] font-bold">
-                  Gold Tier • Most Popular
+                  Gold Tier • Monthly Advisory
                 </span>
-                <h3 className="text-lg font-bold text-slate-900">Quarterly Advance Tax Advisory</h3>
+                <h3 className="text-lg font-bold text-slate-900">Cash-Flow & Advance Tax</h3>
                 <div className="text-2xl font-extrabold text-amber-950 font-mono">
-                  ₹499 <span className="text-xs font-normal text-slate-600">/ month retainer</span>
+                  ₹499* <span className="text-xs font-normal text-slate-600">/ month retainer (Sample)</span>
                 </div>
                 <p className="text-xs text-slate-700">
-                  For high-earners, traders, and Section 44ADA professionals needing advance tax calculation and capital gains harvesting.
+                  Consent-based ongoing engagement providing monthly cash-flow tracking, advance tax timing checks, and quarterly CA reviews.
                 </p>
                 <div className="space-y-2 pt-2 text-xs text-slate-800 font-medium">
                   <div className="flex items-center gap-2">
                     <Check className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                    <span>All Silver Tier Capabilities</span>
+                    <span>All Silver Tier Deliverables</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                    <span>Quarterly Section 234C Advance Tax</span>
+                    <span>Quarterly Section 234C Advance Tax Runs</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    <span>Monthly Cash-Flow Health Monitoring</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-3.5 h-3.5 text-amber-700 shrink-0" />
@@ -805,18 +830,18 @@ export default function LandingPage() {
               </button>
             </div>
 
-            {/* PLATINUM (ROYAL LAVENDER / INDIGO) */}
+            {/* PLATINUM: CONNECTED WEALTH & AUTHORIZED ADVISORY */}
             <div className="p-6 rounded-2xl bg-gradient-to-b from-purple-50/70 via-indigo-50/30 to-white border border-purple-200 shadow-xs space-y-4 flex flex-col justify-between">
               <div className="space-y-3">
                 <span className="px-2.5 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-200 text-[11px] font-bold">
-                  Platinum Tier
+                  Platinum Tier • Wealth Advisory
                 </span>
-                <h3 className="text-lg font-bold text-slate-900">SEBI RIA Wealth Advisory</h3>
+                <h3 className="text-lg font-bold text-slate-900">Connected Wealth Guidance</h3>
                 <div className="text-2xl font-extrabold text-slate-900 font-mono">
-                  ₹1,499 <span className="text-xs font-normal text-slate-500">/ month</span>
+                  ₹1,499* <span className="text-xs font-normal text-slate-500">/ month (Sample)</span>
                 </div>
                 <p className="text-xs text-slate-600">
-                  For HNIs, family trusts, and business owners requiring comprehensive asset allocation and HUF structuring.
+                  Comprehensive wealth information tracking and professionally authorized advisory for HNIs, family offices, and business owners.
                 </p>
                 <div className="space-y-2 pt-2 text-xs text-slate-700">
                   <div className="flex items-center gap-2">
@@ -825,11 +850,15 @@ export default function LandingPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-3.5 h-3.5 text-purple-700 shrink-0" />
-                    <span>Multi-Entity Family Portfolio Audit</span>
+                    <span>Multi-Entity Family Portfolio Overview</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-3.5 h-3.5 text-purple-700 shrink-0" />
-                    <span>HUF Setup & Section 56 Structuring</span>
+                    <span>Professionally Authorized Guidance</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-3.5 h-3.5 text-purple-700 shrink-0" />
+                    <span>HUF Structuring & Section 56 Planning</span>
                   </div>
                 </div>
               </div>
@@ -842,6 +871,10 @@ export default function LandingPage() {
               </button>
             </div>
           </div>
+
+          <p className="text-[11px] text-slate-500 text-center mt-4">
+            *Note: All pricing figures are sample concepts for prototype evaluation only. Final firm engagement fees are subject to CA firm discretion and product owner confirmation.
+          </p>
         </div>
       </section>
 
@@ -904,7 +937,33 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 11. BOTTOM CTA (WARM & WELCOMING TINTS) */}
+      {/* 11. PROTOTYPE TRANSPARENCY NOTICE SECTION */}
+      <section className="py-12 bg-white border-b border-slate-200">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <div className="p-5 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-950 uppercase tracking-wide">
+              <HelpCircle className="w-4 h-4 text-amber-800" />
+              <span>Frontend Prototype Transparency & Disclosure Notice</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-amber-950 leading-relaxed">
+              <div>
+                <strong>Simulated OCR & Extraction:</strong> Document parsing uses simulated bounding coordinates and pre-loaded test schemas.
+              </div>
+              <div>
+                <strong>Sample Tax Calculations:</strong> Slab comparisons follow Finance Act 2024 principles and require certified CA validation.
+              </div>
+              <div>
+                <strong>Simulated CA Sign-Off:</strong> Approvals generate demonstration SHA-256 digests; they are not certified legal digital signatures (DSC).
+              </div>
+              <div>
+                <strong>Fictional Demo Data:</strong> All taxpayer identities, PANs, and employer entities are fictional demonstration records.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 12. BOTTOM CTA */}
       <section className="py-16 md:py-20 bg-gradient-to-r from-blue-50 via-indigo-50/60 to-amber-50/80 border-b border-amber-200/60 text-center">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 space-y-4">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white text-blue-900 font-bold text-xs uppercase tracking-wider border border-blue-200 shadow-2xs">
@@ -942,7 +1001,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 12. CLEAN FOOTER (WARM SLATE/SAND) */}
+      {/* 13. CLEAN FOOTER */}
       <footer className="bg-[#FAF7F2] py-10 px-4 sm:px-6 lg:px-10 text-xs text-slate-600 border-t border-slate-200">
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-6 pb-6 border-b border-slate-200">
           <div className="space-y-2 md:col-span-1">
@@ -969,21 +1028,21 @@ export default function LandingPage() {
           <div>
             <h4 className="font-bold text-slate-800 text-xs mb-2">Engines</h4>
             <ul className="space-y-1.5 text-[11px]">
-              <li>Finance Act 2024 Slabs</li>
+              <li>Finance Act 2024 Slabs (Sample)</li>
               <li>Section 115BAC New Regime Optimizer</li>
-              <li>3-Way Cross-Reconciliation (AIS vs 26AS)</li>
-              <li>2-Page Financial Eye-Opener</li>
-              <li>CBDT ITR JSON Schema Generator</li>
+              <li>3-Way Cross-Reconciliation Matrix</li>
+              <li>2-Page Financial Eye-Opener Report</li>
+              <li>Sample CBDT ITR JSON Schema Export</li>
             </ul>
           </div>
 
           <div>
-            <h4 className="font-bold text-slate-800 text-xs mb-2">Compliance</h4>
+            <h4 className="font-bold text-slate-800 text-xs mb-2">Compliance & Ethics</h4>
             <ul className="space-y-1.5 text-[11px]">
               <li><button onClick={() => handleLaunchApp('/help')} className="hover:text-blue-700 cursor-pointer">Help & DPDP Guide</button></li>
               <li><button onClick={() => handleLaunchApp('/settings')} className="hover:text-blue-700 cursor-pointer">Firm Settings</button></li>
               <li>Zero LLM Math Mandate</li>
-              <li>ICAI Professional Standards</li>
+              <li>Human CA Approval Requirement</li>
             </ul>
           </div>
         </div>
@@ -993,7 +1052,7 @@ export default function LandingPage() {
             © 2026 CA Bharat AI. Built for India. Prototype Demonstration.
           </div>
           <div className="text-center sm:text-right">
-            Disclaimer: CA Bharat AI is a frontend prototype. All calculations are sample demonstrations requiring CA certification.
+            Disclaimer: CA Bharat AI is a frontend prototype. All calculations are sample demonstrations requiring CA certification. Does not perform live CBDT portal filing.
           </div>
         </div>
       </footer>
