@@ -22,7 +22,7 @@ import {
 import { CORE_OPERATING_PRINCIPLE } from '../../data/workflowStagesData'
 
 export default function SimulatorWorkspace() {
-  const [activePersona, setActivePersona] = useState('rahul')
+  const [activePersona, setActivePersona] = useState('arun')
   const [currentStageIndex, setCurrentStageIndex] = useState(0) // 0 to 6
 
   // Persona simulation states
@@ -78,24 +78,24 @@ export default function SimulatorWorkspace() {
         {/* Persona Selector */}
         <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
           <button
-            onClick={() => { setActivePersona('rahul'); resetSimulation(); }}
+            onClick={() => { setActivePersona('arun'); resetSimulation(); }}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activePersona === 'rahul'
+              activePersona === 'arun'
                 ? 'bg-white text-slate-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Rahul S. (Salaried VP)
+            Arun Kumar Verma (Salaried TCS Lead)
           </button>
           <button
-            onClick={() => { setActivePersona('suresh'); resetSimulation(); }}
+            onClick={() => { setActivePersona('radhika'); resetSimulation(); }}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activePersona === 'suresh'
+              activePersona === 'radhika'
                 ? 'bg-white text-slate-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Dr. Suresh (Clinic & HUF)
+            Dr. Radhika Sen (Sec 44ADA Clinic & HUF)
           </button>
         </div>
       </div>
@@ -158,8 +158,8 @@ export default function SimulatorWorkspace() {
                   <span className="font-bold text-slate-900 block">Step 1 & 2: Firm & Taxpayer Profile</span>
                   <div className="space-y-1 text-slate-700">
                     <p><strong>Firm:</strong> Sharma & Co. Chartered Accountants (FRN: DEMO012984N)</p>
-                    <p><strong>Client:</strong> {activePersona === 'rahul' ? 'Rahul Sharma (Salaried Tech VP)' : 'Dr. Suresh S. (Consultant Doctor)'}</p>
-                    <p><strong>PAN:</strong> <span className="font-mono font-bold text-amber-700">{activePersona === 'rahul' ? 'DEMOP1234F' : 'DEMOP4419E'}</span></p>
+                    <p><strong>Client:</strong> {activePersona === 'arun' ? 'Arun Kumar Verma (Salaried TCS Lead)' : 'Dr. Radhika Sen (Consultant Doctor)'}</p>
+                    <p><strong>PAN:</strong> <span className="font-mono font-bold text-amber-700">{activePersona === 'arun' ? 'ABCPA1092F' : 'ABCPR5491M'}</span></p>
                     <p><strong>Assessment Year:</strong> AY 2025-26 (FY 2024-25)</p>
                   </div>
                 </div>
@@ -198,20 +198,20 @@ export default function SimulatorWorkspace() {
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Step 5: Entity Type</span>
                   <p className="font-bold text-slate-900 text-sm">
-                    {activePersona === 'rahul' ? 'Individual (Salaried)' : 'Individual + HUF'}
+                    {activePersona === 'arun' ? 'Individual (Salaried)' : 'Individual (Professional Sec 44ADA)'}
                   </p>
                   <p className="text-slate-500 text-[11px] mt-1">
-                    {activePersona === 'rahul' ? 'Resident & Ordinarily Resident (ROR)' : 'HUF has distinct PAN & separate Karta records'}
+                    {activePersona === 'arun' ? 'Resident & Ordinarily Resident (ROR)' : 'Presumptive profit @ 50% on gross receipts'}
                   </p>
                 </div>
 
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Step 7: Income Sources</span>
                   <p className="font-bold text-slate-900 text-sm">
-                    {activePersona === 'rahul' ? 'Salary + HP + Capital Gains + Other' : 'Clinic Profession 44ADA + HUF Rent'}
+                    {activePersona === 'arun' ? 'Salary + HP + Bank Interest' : 'Clinic Profession 44ADA + Bank Interest'}
                   </p>
                   <p className="text-slate-500 text-[11px] mt-1">
-                    {activePersona === 'rahul' ? '4 Income heads active' : 'Presumptive 50% limit u/s 44ADA'}
+                    {activePersona === 'arun' ? 'Standard Deduction ₹75,000 active' : 'Presumptive 50% limit u/s 44ADA'}
                   </p>
                 </div>
 

@@ -14,6 +14,7 @@ import {
 import { WORKFLOW_STAGES } from '../../data/workflowStagesData'
 import { DEVELOPER_MODULES } from '../../data/workflowModulesData'
 import { PLATFORM_CONTROLS } from '../../data/workflowControlsData'
+import { COMPARISON_POINTS } from '../../data/workflowComparisonData'
 
 export default function GlobalSearchModal({ isOpen, onClose, onSelectStep }) {
   const [query, setQuery] = useState('')
@@ -38,7 +39,7 @@ export default function GlobalSearchModal({ isOpen, onClose, onSelectStep }) {
   }, [])
 
   const results = useMemo(() => {
-    if (!query.trim()) return { steps: allSteps.slice(0, 6), modules: DEVELOPER_MODULES.slice(0, 3), controls: PLATFORM_CONTROLS.slice(0, 2) }
+    if (!query.trim()) return { steps: allSteps.slice(0, 5), modules: DEVELOPER_MODULES.slice(0, 2), controls: PLATFORM_CONTROLS.slice(0, 2), comparison: COMPARISON_POINTS.slice(0, 2) }
 
     const q = query.toLowerCase()
 
@@ -64,7 +65,15 @@ export default function GlobalSearchModal({ isOpen, onClose, onSelectStep }) {
         c.whatItMeans.toLowerCase().includes(q)
     )
 
-    return { steps: matchedSteps, modules: matchedModules, controls: matchedControls }
+    const matchedComparison = COMPARISON_POINTS.filter(
+      (cp) =>
+        cp.title.toLowerCase().includes(q) ||
+        cp.sagText.toLowerCase().includes(q) ||
+        cp.caBharatText.toLowerCase().includes(q) ||
+        cp.difference.toLowerCase().includes(q)
+    )
+
+    return { steps: matchedSteps, modules: matchedModules, controls: matchedControls, comparison: matchedComparison }
   }, [query, allSteps])
 
   if (!isOpen) return null
@@ -187,16 +196,45 @@ export default function GlobalSearchModal({ isOpen, onClose, onSelectStep }) {
             </div>
           )}
 
-          {results.steps.length === 0 && results.modules.length === 0 && results.controls.length === 0 && (
+          {/* SAG Infotech Comparison Points */}
+          {results.comparison && results.comparison.length > 0 && (
+            <div className="pt-2 border-t border-slate-100">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2 font-mono">
+                SAG Infotech vs CA Bharat AI Comparison ({results.comparison.length})
+              </span>
+              <div className="space-y-2">
+                {results.comparison.slice(0, 3).map((cp) => (
+                  <a
+                    key={cp.id}
+                    href="#comparison"
+                    onClick={() => onClose()}
+                    className="block p-2.5 rounded-xl bg-teal-50/60 border border-teal-200 hover:border-teal-300 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900 text-[11px]">{cp.title}</span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-teal-100 text-teal-800">
+                        {cp.category}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-600 line-clamp-2 mt-1">
+                      <strong className="text-teal-900">Diff: </strong>{cp.difference}
+                    </p>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {results.steps.length === 0 && results.modules.length === 0 && results.controls.length === 0 && (!results.comparison || results.comparison.length === 0) && (
             <div className="text-center py-8 text-slate-400 text-sm">
-              No matching steps, modules, or controls found for "{query}".
+              No matching steps, modules, controls, or comparison points found for "{query}".
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500 font-mono">
-          <span>Search across 33 Steps • 12 Modules • 8 Controls</span>
+          <span>Search 33 Steps • 12 Modules • 8 Controls • 22 Comparison Points</span>
           <span>Press ESC to close</span>
         </div>
       </div>

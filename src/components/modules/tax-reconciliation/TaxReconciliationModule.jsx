@@ -102,10 +102,10 @@ export default function TaxReconciliationModule() {
               },
               PersonalInfo: {
                 AssesseeName: {
-                  FirstName: activeClient?.name?.split(' ')[0] || 'Rahul',
-                  SurNameOrOrgName: activeClient?.name?.split(' ')[1] || 'Sharma',
+                  FirstName: activeClient?.name?.split(' ')[0] || 'Taxpayer',
+                  SurNameOrOrgName: activeClient?.name?.split(' ').slice(1).join(' ') || 'Master',
                 },
-                PAN: activeClient?.pan || 'DEMOP1234F',
+                PAN: activeClient?.pan || 'ABCPA1092F',
                 AadhaarCardNo: `XXXXXXXX${activeClient?.aadhaarLast4 || '8821'}`,
                 Status: 'I',
                 EmployerCategory: 'OTH',

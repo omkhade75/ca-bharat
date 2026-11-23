@@ -132,9 +132,9 @@ export default function StepDetailModal({ step, allSteps, onClose, onSelectStep 
                 <Cpu className="w-3.5 h-3.5 text-amber-700" />
                 Live Interactive Simulation / Evidence View
               </span>
-              <span className="text-[11px] text-slate-500 font-mono">Demo Taxpayer: Rahul Sharma</span>
+              <span className="text-[11px] text-slate-500 font-mono">Statutory Profile: Arun Kumar Verma</span>
             </div>
-            <StepInteractiveSimulation step={step} clientPersona="rahul" />
+            <StepInteractiveSimulation step={step} clientPersona="arun" />
           </div>
 
           {/* Key Rule Takeaway Callout */}

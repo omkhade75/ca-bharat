@@ -1,22 +1,31 @@
 // LocalStorage Storage Management for CA Bharat AI Demo State
 
 const STORAGE_KEYS = {
-  CLIENTS: 'ca_bharat_clients_v3',
-  DOCUMENTS: 'ca_bharat_documents_v3',
-  TAX_CASES: 'ca_bharat_tax_cases_v3',
-  CONSENTS: 'ca_bharat_consents_v3',
-  TEAM: 'ca_bharat_team_v3',
-  AUDIT_LOGS: 'ca_bharat_audit_logs_v3',
-  NOTIFICATIONS: 'ca_bharat_notifications_v3',
-  SETTINGS: 'ca_bharat_settings_v3',
-  ACTIVE_AY: 'ca_bharat_active_ay_v3',
-  ACTIVE_CLIENT_ID: 'ca_bharat_active_client_id_v3',
+  CLIENTS: 'ca_bharat_clients_v4',
+  DOCUMENTS: 'ca_bharat_documents_v4',
+  TAX_CASES: 'ca_bharat_tax_cases_v4',
+  CONSENTS: 'ca_bharat_consents_v4',
+  TEAM: 'ca_bharat_team_v4',
+  AUDIT_LOGS: 'ca_bharat_audit_logs_v4',
+  NOTIFICATIONS: 'ca_bharat_notifications_v4',
+  SETTINGS: 'ca_bharat_settings_v4',
+  ACTIVE_AY: 'ca_bharat_active_ay_v4',
+  ACTIVE_CLIENT_ID: 'ca_bharat_active_client_id_v4',
 }
 
 export function loadFromStorage(key, defaultValue) {
   try {
     const raw = localStorage.getItem(key)
-    if (raw) return JSON.parse(raw)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const rawStr = JSON.stringify(parsed)
+      // Guard against legacy mock names from prior versions
+      if (rawStr.includes('Rahul') || rawStr.includes('Vikram M') || rawStr.includes('Dr. Suresh') || rawStr.includes('Priya V')) {
+        localStorage.removeItem(key)
+        return defaultValue
+      }
+      return parsed
+    }
   } catch (err) {
     console.warn(`Error reading from localStorage key: ${key}`, err)
   }

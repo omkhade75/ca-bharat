@@ -62,6 +62,12 @@ export default function Navbar({ onOpenSearch, onOpenSimulator }) {
           <a href="#simulator" className="hover:text-slate-900 transition-colors">
             Simulator
           </a>
+          <a href="#comparison" className="hover:text-slate-900 transition-colors flex items-center gap-1">
+            <span>SAG vs AI</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-teal-50 text-teal-800 text-[10px] font-mono border border-teal-200">
+              22 Pts
+            </span>
+          </a>
           <a href="#modules" className="hover:text-slate-900 transition-colors">
             12 Modules
           </a>

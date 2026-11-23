@@ -200,7 +200,7 @@ export default function SettingsModule() {
                 <span>Reset to Factory Demo State</span>
               </span>
               <p className="text-[11px] text-amber-800 leading-normal">
-                Want to run the complete demo flow from scratch with Rahul Sharma's 2 unaccepted discrepancies?
+                Reset local firm storage back to clean state with 0 active clients. You can onboard new taxpayers or seed 7 statutory entity profiles anytime.
               </p>
             </div>
 

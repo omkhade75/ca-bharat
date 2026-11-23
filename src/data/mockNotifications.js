@@ -1,28 +1,28 @@
-// Notifications Mock Data (Fictional Demonstration Alerts)
+// Notifications Mock Data (Statutory Demonstration Alerts)
 
 export const INITIAL_NOTIFICATIONS = [
   {
     id: 'notif-001',
-    title: 'Discrepancy Detected: Rahul S. (Demo Taxpayer)',
-    message: 'AIS reported ₹46,000 savings interest not declared in Form 16. Action required in 3-way reconciliation.',
+    title: '3-Way Reconciliation Matched: Arun Kumar Verma',
+    message: 'Form 16 TDS and TRACES 26AS reconciled with zero variance. Ready for CA sign-off under Section 115BAC.',
     timestamp: '10 minutes ago',
     read: false,
-    type: 'warning',
+    type: 'success',
     link: '/tax-reconciliation',
   },
   {
     id: 'notif-002',
-    title: 'Simulated Sign-Off: Vikram M. (Demo Taxpayer)',
-    message: 'CA Rajesh Sharma completed simulated review on ITR-1 filing pack. Demonstration action complete.',
+    title: 'Section 44ADA Schedule Verified: Dr. Radhika Sen',
+    message: 'Presumptive professional receipts of ₹28.5L verified. 50% deemed profit computed for ITR-4 filing.',
     timestamp: '1 hour ago',
     read: false,
-    type: 'success',
-    link: '/insights-delivery',
+    type: 'info',
+    link: '/tax-reconciliation',
   },
   {
     id: 'notif-003',
-    title: 'Consent Renewal Pending: Sneha K. (Demo Taxpayer)',
-    message: 'Consent demonstration for AY 2024-25 expired. Client sent simulated re-authorization link via WhatsApp.',
+    title: 'HUF Deed & Consent Active: Singhania HUF',
+    message: 'HUF digital consent token active for AY 2025-26. Karta verification completed for ITR-2.',
     timestamp: '3 hours ago',
     read: true,
     type: 'info',
@@ -30,8 +30,8 @@ export const INITIAL_NOTIFICATIONS = [
   },
   {
     id: 'notif-004',
-    title: 'Simulated Extraction Completed: Priya V. (Demo Taxpayer)',
-    message: 'Simulated extraction completed. Presumptive tax schedules generated for Section 44ADA review.',
+    title: 'Corporate Intake Staged: TechNova Systems Pvt Ltd',
+    message: 'Audited financial statements and MCA disclosures staged for Section 115BAA corporate tax computation.',
     timestamp: '5 hours ago',
     read: true,
     type: 'info',

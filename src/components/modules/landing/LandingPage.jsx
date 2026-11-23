@@ -582,8 +582,8 @@ export default function LandingPage() {
             {/* Reconciliation Table Preview Card */}
             <div className="lg:col-span-7 bg-white p-5 sm:p-6 rounded-2xl border border-teal-200/90 shadow-sm space-y-3">
               <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-200">
-                <span className="font-bold text-slate-900">Reconciliation Matrix Demo (Client: Rahul S. DEMOP1234F)</span>
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">2 Discrepancies Flagged</span>
+                <span className="font-bold text-slate-900">Reconciliation Matrix Demo (Client: Arun Kumar Verma • ABCPA1092F)</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-bold">Reconciled Zero Variance</span>
               </div>
 
               <div className="overflow-x-auto">

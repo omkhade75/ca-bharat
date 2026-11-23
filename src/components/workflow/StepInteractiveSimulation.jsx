@@ -103,11 +103,11 @@ export default function StepInteractiveSimulation({ step, clientPersona = 'rahul
           <div className="grid grid-cols-2 gap-3 bg-white p-3 rounded-lg border border-slate-200">
             <div>
               <span className="text-[10px] text-slate-500 uppercase block">Full Legal Name</span>
-              <span className="font-semibold text-slate-900">Rahul Sharma (Demo Taxpayer)</span>
+              <span className="font-semibold text-slate-900">Arun Kumar Verma</span>
             </div>
             <div>
               <span className="text-[10px] text-slate-500 uppercase block">Permanent Account Number (PAN)</span>
-              <span className="font-mono font-bold text-amber-700">DEMOP1234F</span>
+              <span className="font-mono font-bold text-amber-700">ABCPA1092F</span>
             </div>
             <div>
               <span className="text-[10px] text-slate-500 uppercase block">Date of Birth / Inc</span>
@@ -115,7 +115,7 @@ export default function StepInteractiveSimulation({ step, clientPersona = 'rahul
             </div>
             <div>
               <span className="text-[10px] text-slate-500 uppercase block">Verified Contact</span>
-              <span className="text-slate-800">+91 98201 12345 • rahul.demo@example.com</span>
+              <span className="text-slate-800">+91 98201 11001 • arun.verma@example.com</span>
             </div>
           </div>
           <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
@@ -366,10 +366,10 @@ export default function StepInteractiveSimulation({ step, clientPersona = 'rahul
       return (
         <div className="grid grid-cols-2 gap-3 text-xs">
           {[
-            { name: 'RahulS_Form16_PartAB.pdf', type: 'Form 16', size: '1.4 MB', status: 'Encrypted in RAM', conf: '99.4%' },
+            { name: 'ArunV_Form16_PartAB.pdf', type: 'Form 16', size: '1.4 MB', status: 'Encrypted in RAM', conf: '99.4%' },
             { name: 'TRACES_Form26AS_AY2526.pdf', type: 'Form 26AS', size: '820 KB', status: 'Encrypted in RAM', conf: '99.6%' },
             { name: 'AIS_TIS_Summary_AY2526.pdf', type: 'AIS / TIS', size: '2.1 MB', status: 'Encrypted in RAM', conf: '98.9%' },
-            { name: 'Zerodha_TaxPnl_FY2425.xlsx', type: 'Broker P&L', size: '340 KB', status: 'Structured Ingest', conf: '100%' },
+            { name: 'HDFC_Bank_Statement.pdf', type: 'Bank Statement', size: '340 KB', status: 'Structured Ingest', conf: '100%' },
           ].map((file, i) => (
             <div key={i} className="bg-white border border-slate-200 p-3 rounded-lg space-y-1">
               <div className="flex items-center justify-between">
@@ -465,7 +465,7 @@ export default function StepInteractiveSimulation({ step, clientPersona = 'rahul
           <div className="bg-white p-3 rounded-lg border border-amber-200 space-y-2">
             <span className="text-[10px] text-slate-400 uppercase font-semibold block">Drafted Client WhatsApp Communication:</span>
             <p className="text-slate-800 text-[11px] italic bg-slate-50 p-2 rounded border border-slate-100">
-              "Dear Rahul, our automated review of your AY 2025-26 tax records identified ₹46,000 in savings interest reported in your AIS from HDFC Bank. Please upload your bank interest certificate or confirm this figure so we can proceed with 3-way reconciliation."
+              "Dear Arun, our automated review of your AY 2025-26 tax records identified ₹18,500 in savings interest reported in your AIS from HDFC Bank. Please confirm this figure so we can proceed with 3-way reconciliation."
             </p>
             <div className="flex justify-end gap-2 pt-1">
               <button className="px-3 py-1 bg-emerald-600 text-white rounded font-medium text-[11px] hover:bg-emerald-700 flex items-center gap-1">
@@ -623,7 +623,7 @@ export default function StepInteractiveSimulation({ step, clientPersona = 'rahul
             ))}
           </div>
           <div className="bg-indigo-50 p-2.5 rounded-lg border border-indigo-200 text-indigo-900 text-[11px]">
-            <span className="font-bold">Form Selection Justification:</span> Selected <span className="font-mono font-bold">ITR-2</span> because Rahul Sharma has capital gains of ₹1,45,000 from equity trading, which legally disqualifies ITR-1 Sahaj.
+            <span className="font-bold">Form Selection Rule:</span> Selected <span className="font-mono font-bold">ITR-1 (Sahaj)</span> for Arun Kumar Verma based on resident salaried income (TCS) and single bank interest schedule without business turnover.
           </div>
         </div>
       )

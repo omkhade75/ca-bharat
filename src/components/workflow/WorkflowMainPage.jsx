@@ -3,6 +3,8 @@ import Navbar from './Navbar'
 import HeroSection from './HeroSection'
 import WorkflowStagesExplorer from './WorkflowStagesExplorer'
 import SimulatorWorkspace from './SimulatorWorkspace'
+import WorkflowComparisonSection from './WorkflowComparisonSection'
+import WorkflowComparisonModal from './WorkflowComparisonModal'
 import ModulesMatrixSection from './ModulesMatrixSection'
 import ControlsSection from './ControlsSection'
 import RoadmapSection from './RoadmapSection'
@@ -14,6 +16,7 @@ import { WORKFLOW_STAGES } from '../../data/workflowStagesData'
 export default function WorkflowMainPage() {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [selectedStepModal, setSelectedStepModal] = useState(null)
+  const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false)
 
   const allSteps = WORKFLOW_STAGES.flatMap((stage) => stage.steps)
 
@@ -58,6 +61,11 @@ export default function WorkflowMainPage() {
           {/* Interactive Live Case Simulator */}
           <SimulatorWorkspace />
 
+          {/* Workflow Comparison: Traditional CA Software (SAG Infotech Genius) vs CA Bharat AI */}
+          <WorkflowComparisonSection
+            onOpenFullModal={() => setIsComparisonModalOpen(true)}
+          />
+
           {/* The 12 Developer Modules Matrix */}
           <ModulesMatrixSection
             onSelectStepNumber={(num) => handleOpenStepByNumber(num)}
@@ -90,6 +98,12 @@ export default function WorkflowMainPage() {
           onSelectStep={(next) => setSelectedStepModal(next)}
         />
       )}
+
+      {/* Comprehensive SAG Infotech vs CA Bharat AI Comparison Modal */}
+      <WorkflowComparisonModal
+        isOpen={isComparisonModalOpen}
+        onClose={() => setIsComparisonModalOpen(false)}
+      />
     </div>
   )
 }
