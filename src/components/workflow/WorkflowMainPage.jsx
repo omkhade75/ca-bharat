@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import Navbar from './Navbar'
+import SimpleWorkflowOverview from './SimpleWorkflowOverview'
 import HeroSection from './HeroSection'
 import WorkflowStagesExplorer from './WorkflowStagesExplorer'
 import SimulatorWorkspace from './SimulatorWorkspace'
@@ -12,8 +13,10 @@ import GlobalSearchModal from './GlobalSearchModal'
 import StepDetailModal from './StepDetailModal'
 import Footer from './Footer'
 import { WORKFLOW_STAGES } from '../../data/workflowStagesData'
+import { Sparkles, Layers, ArrowLeft } from 'lucide-react'
 
 export default function WorkflowMainPage() {
+  const [displayMode, setDisplayMode] = useState('simple') // 'simple' | 'technical'
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [selectedStepModal, setSelectedStepModal] = useState(null)
   const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false)
@@ -36,47 +39,93 @@ export default function WorkflowMainPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans selection:bg-amber-100 selection:text-amber-900 antialiased">
-      {/* Sticky Navigation */}
+      {/* Sticky Navigation with Mode Switcher */}
       <Navbar
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenSimulator={() => scrollToSection('simulator')}
+        displayMode={displayMode}
+        onToggleDisplayMode={(mode) => {
+          setDisplayMode(mode)
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
       />
 
       {/* Main Content Sections */}
-      <main className="flex-1 space-y-16 pb-16">
-        {/* Hero & Overview */}
-        <HeroSection
-          onExploreSteps={() => scrollToSection('workflow-stages')}
-          onLaunchSimulator={() => scrollToSection('simulator')}
-        />
+      <main className="flex-1 pb-16">
+        {displayMode === 'simple' ? (
+          /* Short, Simple & Human-Centric UI (Default) */
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+            <SimpleWorkflowOverview
+              onSwitchToFullSpec={() => {
+                setDisplayMode('technical')
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+              onOpenComparisonModal={() => setIsComparisonModalOpen(true)}
+            />
+          </div>
+        ) : (
+          /* Full 33-Step Engineering & Statutory Specification */
+          <div className="space-y-16">
+            {/* Top Switcher Notice Bar */}
+            <div className="bg-slate-900 text-white py-2.5 px-4 text-xs">
+              <div className="max-w-7xl mx-auto flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="font-mono uppercase tracking-wider text-[11px] text-amber-300">
+                    Full Engineering View Active
+                  </span>
+                  <span className="hidden sm:inline text-slate-400">
+                    — Showing all 7 stages, 33 steps, 12 modules & 8 controls
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    setDisplayMode('simple')
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs transition-colors cursor-pointer border border-slate-700"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Return to Simple Overview</span>
+                </button>
+              </div>
+            </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-20">
-          {/* The 7 Stages & 33 Steps Explorer */}
-          <WorkflowStagesExplorer
-            onOpenSimulator={(step) => {
-              scrollToSection('simulator')
-            }}
-          />
+            {/* Hero & Overview */}
+            <HeroSection
+              onExploreSteps={() => scrollToSection('workflow-stages')}
+              onLaunchSimulator={() => scrollToSection('simulator')}
+            />
 
-          {/* Interactive Live Case Simulator */}
-          <SimulatorWorkspace />
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-20">
+              {/* The 7 Stages & 33 Steps Explorer */}
+              <WorkflowStagesExplorer
+                onOpenSimulator={(step) => {
+                  scrollToSection('simulator')
+                }}
+              />
 
-          {/* Workflow Comparison: Traditional CA Software (SAG Infotech Genius) vs CA Bharat AI */}
-          <WorkflowComparisonSection
-            onOpenFullModal={() => setIsComparisonModalOpen(true)}
-          />
+              {/* Interactive Live Case Simulator */}
+              <SimulatorWorkspace />
 
-          {/* The 12 Developer Modules Matrix */}
-          <ModulesMatrixSection
-            onSelectStepNumber={(num) => handleOpenStepByNumber(num)}
-          />
+              {/* Workflow Comparison: Traditional CA Software (SAG Infotech Genius) vs CA Bharat AI */}
+              <WorkflowComparisonSection
+                onOpenFullModal={() => setIsComparisonModalOpen(true)}
+              />
 
-          {/* The 8 Essential Platform Controls */}
-          <ControlsSection />
+              {/* The 12 Developer Modules Matrix */}
+              <ModulesMatrixSection
+                onSelectStepNumber={(num) => handleOpenStepByNumber(num)}
+              />
 
-          {/* Product Roadmap (Phases 1 - 4) */}
-          <RoadmapSection />
-        </div>
+              {/* The 8 Essential Platform Controls */}
+              <ControlsSection />
+
+              {/* Product Roadmap (Phases 1 - 4) */}
+              <RoadmapSection />
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Footer */}
