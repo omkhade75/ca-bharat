@@ -2,7 +2,7 @@ import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider } from './context/AppContext'
 import AppLayout from './components/layout/AppLayout'
-import LandingPage from './components/modules/landing/LandingPage'
+import WorkflowMainPage from './components/workflow/WorkflowMainPage'
 import MainDashboard from './components/modules/dashboard/MainDashboard'
 import FirmClientsModule from './components/modules/firm-clients/FirmClientsModule'
 import DocumentIntelligenceModule from './components/modules/document-intelligence/DocumentIntelligenceModule'
@@ -16,9 +16,10 @@ export default function App() {
     <AppProvider>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
-          {/* Public Landing Page */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/landing" element={<LandingPage />} />
+          {/* Primary Master Static Site & End-to-End Business Workflow */}
+          <Route path="/" element={<WorkflowMainPage />} />
+          <Route path="/workflow" element={<WorkflowMainPage />} />
+          <Route path="/landing" element={<WorkflowMainPage />} />
 
           {/* Internal CA Application Workspace */}
           <Route element={<AppLayout />}>
