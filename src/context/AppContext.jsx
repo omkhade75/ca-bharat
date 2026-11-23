@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { INITIAL_CLIENTS } from '../data/mockClients'
-import { INITIAL_DOCUMENTS } from '../data/mockDocuments'
-import { INITIAL_TAX_CASES } from '../data/mockTaxCases'
-import { INITIAL_CONSENTS } from '../data/mockConsents'
+import { INITIAL_CLIENTS, SAMPLE_STATUTORY_CLIENTS } from '../data/mockClients'
+import { INITIAL_DOCUMENTS, SAMPLE_STATUTORY_DOCUMENTS } from '../data/mockDocuments'
+import { INITIAL_TAX_CASES, SAMPLE_STATUTORY_TAX_CASES } from '../data/mockTaxCases'
+import { INITIAL_CONSENTS, SAMPLE_STATUTORY_CONSENTS } from '../data/mockConsents'
 import { INITIAL_TEAM, FIRM_DETAILS } from '../data/mockTeam'
 import { INITIAL_AUDIT_LOGS } from '../data/mockAuditLogs'
 import { INITIAL_NOTIFICATIONS } from '../data/mockNotifications'
@@ -13,6 +13,12 @@ import {
   getClientDocumentBreakdown,
   WORKFLOW_STAGES,
 } from '../utils/workflowHelper'
+import {
+  getCategoryDetails,
+  getRecommendedItr,
+  getExpectedPan4thChar,
+  validatePanStructure,
+} from '../data/statutoryTaxpayerTypes'
 
 const AppContext = createContext(null)
 
@@ -38,7 +44,7 @@ export function AppProvider({ children }) {
   const [notifications, setNotifications] = useState(() => loadFromStorage(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS))
 
   const [activeAy, setActiveAy] = useState(() => loadFromStorage(STORAGE_KEYS.ACTIVE_AY, 'AY 2025-26'))
-  const [activeClientId, setActiveClientId] = useState(() => loadFromStorage(STORAGE_KEYS.ACTIVE_CLIENT_ID, 'cli-001'))
+  const [activeClientId, setActiveClientId] = useState(() => loadFromStorage(STORAGE_KEYS.ACTIVE_CLIENT_ID, ''))
   const [globalSearch, setGlobalSearch] = useState('')
   const [isSimulatingExtraction, setIsSimulatingExtraction] = useState(false)
 
@@ -54,19 +60,27 @@ export function AppProvider({ children }) {
   useEffect(() => { saveToStorage(STORAGE_KEYS.ACTIVE_CLIENT_ID, activeClientId) }, [activeClientId])
 
   // Computed active client & tax case
-  const activeClient = clients.find((c) => c.id === activeClientId) || clients[0] || null
-  const activeTaxCase = taxCases.find((tc) => tc.clientId === activeClientId) || taxCases[0] || null
-  const activeClientDocs = documents.filter((d) => d.clientId === activeClientId)
+  const activeClient = clients.find((c) => c.id === activeClientId) || (clients.length > 0 ? clients[0] : null)
+  const activeTaxCase = activeClient ? (taxCases.find((tc) => tc.clientId === activeClient.id) || null) : null
+  const activeClientDocs = activeClient ? documents.filter((d) => d.clientId === activeClient.id) : []
+
+  // Ensure activeClientId stays in sync if active client is auto-selected
+  useEffect(() => {
+    if (clients.length > 0 && (!activeClientId || !clients.some((c) => c.id === activeClientId))) {
+      setActiveClientId(clients[0].id)
+    } else if (clients.length === 0 && activeClientId) {
+      setActiveClientId('')
+    }
+  }, [clients, activeClientId])
 
   // Dynamic Case Workflow Stage for Active Client
-  const activeWorkflowStage = getClientWorkflowStage(
-    activeClient,
-    activeTaxCase,
-    activeClientDocs,
-    isSimulatingExtraction
-  )
+  const activeWorkflowStage = activeClient
+    ? getClientWorkflowStage(activeClient, activeTaxCase, activeClientDocs, isSimulatingExtraction)
+    : WORKFLOW_STAGES.ONBOARDING
   const activeWorkflowMeta = WORKFLOW_STATUS_META[activeWorkflowStage] || WORKFLOW_STATUS_META[WORKFLOW_STAGES.ONBOARDING]
-  const activeDocBreakdown = getClientDocumentBreakdown(activeClient, activeClientDocs)
+  const activeDocBreakdown = activeClient
+    ? getClientDocumentBreakdown(activeClient, activeClientDocs)
+    : { totalRequired: 0, uploadedCount: 0, isComplete: false, missingCategories: [] }
 
   // Helper to query stage for any client
   const getWorkflowStageForClient = (client) => {
@@ -94,17 +108,20 @@ export function AppProvider({ children }) {
 
   // Client Actions
   const addClient = (clientData) => {
+    const categoryDetails = getCategoryDetails(clientData.category)
+    const recommendedItr = getRecommendedItr(clientData.category)
     const newId = `cli-${String(clients.length + 1).padStart(3, '0')}`
     const newClient = {
       id: newId,
       status: 'Consent Pending',
-      tier: 'Silver',
+      tier: clientData.tier || 'Gold',
       activeAY: activeAy,
       consentStatus: 'Pending',
       docsUploaded: 0,
-      docsRequired: 4,
+      docsRequired: categoryDetails?.requiredDocs?.length || 4,
       refundExpected: 0,
       discrepancyCount: 0,
+      itrType: recommendedItr,
       assignedTo: 'Ananya Joshi (Senior Associate)',
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       ...clientData,
@@ -118,10 +135,10 @@ export function AppProvider({ children }) {
       pan: newClient.pan,
       assessmentYear: activeAy,
       financialYear: activeAy === 'AY 2025-26' ? 'FY 2024-25' : 'FY 2023-24',
-      filingForm: 'ITR-1',
+      filingForm: recommendedItr,
       status: 'Consent Pending',
       assignedCa: 'CA Rajesh Sharma (Partner)',
-      reviewerNotes: 'New client onboarding initiated. Awaiting DPDP consent and document intake.',
+      reviewerNotes: `New taxpayer onboarding for ${clientData.category} (${categoryDetails?.statutorySection || 'Income-tax Act, 1961'}). Awaiting DPDP digital consent and document upload.`,
       checklist: {
         panIdentityVerified: true,
         form16Reconciled: false,
@@ -150,20 +167,81 @@ export function AppProvider({ children }) {
         selfAssessmentTax: 0,
         totalTds: 0,
       },
-      reconciliationItems: [],
-      approval: {
+      reconciliationMatrix: [],
+      caApproval: {
         isApproved: false,
         approvedBy: null,
         approvedAt: null,
-        sha256Hash: null,
+        verificationChecklist: {
+          panIdentityConfirmed: true,
+          traces26asVerified: false,
+          aisSftReconciled: false,
+          bankValidated: false,
+          deductionReceiptsAudited: false,
+        },
       },
+    }
+
+    // Also create initial consent record
+    const newConsent = {
+      id: `cns-${Date.now()}`,
+      clientId: newId,
+      clientName: newClient.name,
+      pan: newClient.pan,
+      assessmentYear: activeAy,
+      scope: `${newClient.category} Tax Return Filing & Statutory Verification`,
+      status: 'PENDING',
+      ipAddress: 'Awaiting Client Digital Signature',
+      userAgent: '—',
+      timestamp: new Date().toISOString(),
+      sessionIdHash: `cns-token-${newId}`,
+      legalDeclaration: `Pending DPDP consent authorization for Sharma & Co. Chartered Accountants to process tax records for ${newClient.name} (${newClient.pan}).`,
+      validUntil: '2027-03-31T23:59:59Z',
     }
 
     setClients((prev) => [newClient, ...prev])
     setTaxCases((prev) => [newCase, ...prev])
+    setConsents((prev) => [newConsent, ...prev])
     setActiveClientId(newId)
-    addAuditLog('CLIENT_CREATED', `New taxpayer ${newClient.name} (${newClient.pan}) onboarded into system.`, newClient.name, newClient.pan, 'Intake')
+    addAuditLog(
+      'CLIENT_CREATED',
+      `New taxpayer profile ${newClient.name} (${newClient.pan}) onboarded as "${newClient.category}" with recommended ${recommendedItr}.`,
+      newClient.name,
+      newClient.pan,
+      'Intake'
+    )
     return newId
+  }
+
+  const deleteClient = (id) => {
+    const target = clients.find((c) => c.id === id)
+    setClients((prev) => prev.filter((c) => c.id !== id))
+    setDocuments((prev) => prev.filter((d) => d.clientId !== id))
+    setTaxCases((prev) => prev.filter((tc) => tc.clientId !== id))
+    setConsents((prev) => prev.filter((c) => c.clientId !== id))
+    if (activeClientId === id) {
+      const remaining = clients.filter((c) => c.id !== id)
+      setActiveClientId(remaining.length > 0 ? remaining[0].id : '')
+    }
+    addAuditLog('CLIENT_DELETED', `Deleted taxpayer profile ${target?.name || id} (${target?.pan || '—'}) from firm records.`)
+  }
+
+  const clearAllClients = () => {
+    setClients([])
+    setDocuments([])
+    setTaxCases([])
+    setConsents([])
+    setActiveClientId('')
+    addAuditLog('CLEAR_ALL_DATA', 'Removed all taxpayer profiles from firm workspace as per user direction.')
+  }
+
+  const seedStatutoryTaxpayers = () => {
+    setClients(SAMPLE_STATUTORY_CLIENTS)
+    setDocuments(SAMPLE_STATUTORY_DOCUMENTS)
+    setTaxCases(SAMPLE_STATUTORY_TAX_CASES)
+    setConsents(SAMPLE_STATUTORY_CONSENTS)
+    setActiveClientId('cli-001')
+    addAuditLog('SEED_STATUTORY_DATA', 'Loaded 7 real statutory Indian tax entity demonstration profiles across Section 2(31).')
   }
 
   const updateClient = (id, updatedFields) => {
@@ -614,7 +692,7 @@ export function AppProvider({ children }) {
     addAuditLog('CORRECTION_REQUESTED', `Requested client clarification: ${reason}`, activeClient?.name, activeClient?.pan, 'Review')
   }
 
-  // Reset to original mock data
+  // Reset to initial clean state
   const resetAllDataToDemo = () => {
     clearDemoStorage()
     setClients(INITIAL_CLIENTS)
@@ -625,7 +703,8 @@ export function AppProvider({ children }) {
     setAuditLogs(INITIAL_AUDIT_LOGS)
     setNotifications(INITIAL_NOTIFICATIONS)
     setActiveAy('AY 2025-26')
-    setActiveClientId('cli-001')
+    setActiveClientId('')
+    addAuditLog('SYSTEM_RESET', 'Demo state reset to clean initial configuration.')
   }
 
   return (
@@ -637,6 +716,9 @@ export function AppProvider({ children }) {
         activeClientId,
         setActiveClientId,
         addClient,
+        deleteClient,
+        clearAllClients,
+        seedStatutoryTaxpayers,
         updateClient,
         grantConsent,
         documents,

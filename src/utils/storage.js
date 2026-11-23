@@ -1,16 +1,16 @@
 // LocalStorage Storage Management for CA Bharat AI Demo State
 
 const STORAGE_KEYS = {
-  CLIENTS: 'ca_bharat_clients_v2',
-  DOCUMENTS: 'ca_bharat_documents_v2',
-  TAX_CASES: 'ca_bharat_tax_cases_v2',
-  CONSENTS: 'ca_bharat_consents_v2',
-  TEAM: 'ca_bharat_team_v2',
-  AUDIT_LOGS: 'ca_bharat_audit_logs_v2',
-  NOTIFICATIONS: 'ca_bharat_notifications_v2',
-  SETTINGS: 'ca_bharat_settings_v2',
-  ACTIVE_AY: 'ca_bharat_active_ay_v2',
-  ACTIVE_CLIENT_ID: 'ca_bharat_active_client_id_v2',
+  CLIENTS: 'ca_bharat_clients_v3',
+  DOCUMENTS: 'ca_bharat_documents_v3',
+  TAX_CASES: 'ca_bharat_tax_cases_v3',
+  CONSENTS: 'ca_bharat_consents_v3',
+  TEAM: 'ca_bharat_team_v3',
+  AUDIT_LOGS: 'ca_bharat_audit_logs_v3',
+  NOTIFICATIONS: 'ca_bharat_notifications_v3',
+  SETTINGS: 'ca_bharat_settings_v3',
+  ACTIVE_AY: 'ca_bharat_active_ay_v3',
+  ACTIVE_CLIENT_ID: 'ca_bharat_active_client_id_v3',
 }
 
 export function loadFromStorage(key, defaultValue) {
@@ -33,7 +33,7 @@ export function saveToStorage(key, value) {
 
 export function clearDemoStorage() {
   Object.values(STORAGE_KEYS).forEach((k) => localStorage.removeItem(k))
-  // Also clean up legacy v1 keys if present
+  // Also clean up any legacy keys if present
   try {
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i)

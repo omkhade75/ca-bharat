@@ -121,20 +121,28 @@ export default function Sidebar({ isMobileOpen = false, onCloseMobile = () => {}
             onChange={(e) => setActiveClientId(e.target.value)}
             className="w-full bg-slate-800 text-slate-100 text-xs rounded-lg px-2.5 py-2 border border-slate-700 hover:border-slate-600 focus:outline-hidden focus:ring-1 focus:ring-amber-500 transition-colors appearance-none cursor-pointer pr-7 font-medium truncate"
           >
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name} ({client.pan}) — {client.activeAY}
-              </option>
-            ))}
+            {clients.length === 0 ? (
+              <option value="">No Active Taxpayer (Empty)</option>
+            ) : (
+              clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name} ({client.pan}) — {client.activeAY}
+                </option>
+              ))
+            )}
           </select>
           <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2 top-2.5 pointer-events-none" />
         </div>
-        {activeClient && (
+        {activeClient ? (
           <div className="flex items-center justify-between mt-1.5 text-[11px] text-slate-400">
-            <span className="truncate">{activeClient.category.split(' - ')[0]}</span>
+            <span className="truncate">{activeClient.category?.split(' - ')[0] || activeClient.category}</span>
             <span className={`font-semibold ${activeWorkflowMeta?.sidebarColor || 'text-slate-400'}`}>
               {activeWorkflowMeta?.sidebarBadge || 'Active'}
             </span>
+          </div>
+        ) : (
+          <div className="mt-1.5 text-[10.5px] text-slate-500 italic">
+            Directory is empty
           </div>
         )}
       </div>

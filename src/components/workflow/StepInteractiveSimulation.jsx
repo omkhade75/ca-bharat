@@ -25,10 +25,12 @@ import {
   FileCheck,
   TrendingUp,
 } from 'lucide-react'
+import { STATUTORY_TAXPAYER_CATEGORIES } from '../../data/statutoryTaxpayerTypes'
 
 export default function StepInteractiveSimulation({ step, clientPersona = 'rahul' }) {
   const [copied, setCopied] = useState(false)
   const [selectedHuf, setSelectedHuf] = useState(false)
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState('IND_SALARIED')
   const [selectedRegime, setSelectedRegime] = useState('new')
   const [discrepancyResolved, setDiscrepancyResolved] = useState(false)
   const [caApproved, setCaApproved] = useState(false)
@@ -190,49 +192,90 @@ export default function StepInteractiveSimulation({ step, clientPersona = 'rahul
         </div>
       )
 
-    case 'taxpayer_type':
+    case 'taxpayer_type': {
+      const activeTaxCategory = STATUTORY_TAXPAYER_CATEGORIES.find((c) => c.id === selectedCategoryKey) || STATUTORY_TAXPAYER_CATEGORIES[0]
       return (
-        <div className="space-y-3 text-xs">
-          <p className="text-slate-600 text-[11px]">Select entity classification to load specific compliance criteria:</p>
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { type: 'Individual', label: 'Individual (Salaried / Pro)', sub: 'Section 115BAC / Old' },
-              { type: 'HUF', label: 'Hindu Undivided Family (HUF)', sub: 'Separate PAN & Karta details' },
-              { type: 'Firm', label: 'Partnership / LLP', sub: 'Flat 30% tax + 12% surcharge' },
-              { type: 'Company', label: 'Domestic Company', sub: 'Section 115BAA 22% rate' },
-              { type: 'Trust', label: 'Trust / Society', sub: 'Section 11 / 12 exemption' },
-              { type: 'AOP', label: 'AOP / BOI', sub: 'Maximum Marginal Rate' },
-            ].map((item) => (
-              <button
-                key={item.type}
-                onClick={() => setSelectedHuf(item.type === 'HUF')}
-                className={`p-2.5 rounded-lg border text-left transition-all ${
-                  (item.type === 'HUF' && selectedHuf) || (item.type === 'Individual' && !selectedHuf)
-                    ? 'border-amber-500 bg-amber-50/80 shadow-xs ring-1 ring-amber-400'
-                    : 'border-slate-200 bg-white hover:bg-slate-50'
-                }`}
-              >
-                <div className="font-semibold text-slate-900">{item.label}</div>
-                <div className="text-[10px] text-slate-500 mt-0.5">{item.sub}</div>
-              </button>
-            ))}
+        <div className="space-y-3.5 text-xs">
+          <div className="flex items-center justify-between">
+            <p className="text-slate-600 text-[11px] font-medium">
+              Select statutory entity classification under Section 2(31) of the Income-tax Act, 1961:
+            </p>
+            <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+              15 Statutory Types Active
+            </span>
           </div>
-          {selectedHuf ? (
-            <div className="bg-amber-100/70 p-3 rounded-lg border border-amber-300 text-amber-900 text-[11px] space-y-1">
-              <span className="font-bold flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-700" /> HUF Statutory Rule Applied:
+
+          {/* Grid of entities */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
+            {STATUTORY_TAXPAYER_CATEGORIES.map((item) => {
+              const isSelected = item.id === activeTaxCategory.id
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setSelectedCategoryKey(item.id)
+                    setSelectedHuf(item.groupId === 'HUF')
+                  }}
+                  className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                    isSelected
+                      ? 'border-blue-600 bg-blue-50/80 shadow-xs ring-1 ring-blue-500'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                      {item.groupName}
+                    </span>
+                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700">
+                      {item.recommendedItr}
+                    </span>
+                  </div>
+                  <div className="font-semibold text-slate-900 truncate text-[11px]">{item.category}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5 font-mono">PAN 4th: '{item.pan4thChar}'</div>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Active Entity Statutory Rule Summary */}
+          <div className="bg-slate-900 text-white p-3.5 rounded-xl border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span className="font-bold text-white text-xs">{activeTaxCategory.category}</span>
+              </div>
+              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">
+                {activeTaxCategory.statutorySection}
               </span>
-              <p>
-                "HUF is a distinct taxpayer status with its own PAN, not an income head." Requires Karta PAN, Coparcener details, and Deed of Declaration.
-              </p>
             </div>
-          ) : (
-            <div className="bg-blue-50 p-2.5 rounded-lg border border-blue-200 text-blue-900 text-[11px]">
-              <span className="font-semibold">Individual Taxpayer Model Active:</span> ROR status confirmed; Form 16, AIS, and TRACES 26AS applicable.
+
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              {activeTaxCategory.governingRules}
+            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[10px] border-t border-slate-800 text-slate-400">
+              <div>
+                <span className="block text-slate-500">Applicable Forms:</span>
+                <span className="text-slate-200 font-medium">{activeTaxCategory.applicableItr.join(', ')}</span>
+              </div>
+              <div>
+                <span className="block text-slate-500">PAN 4th Character:</span>
+                <span className="text-amber-300 font-mono font-bold">'{activeTaxCategory.pan4thChar}' ({activeTaxCategory.groupName})</span>
+              </div>
+              <div>
+                <span className="block text-slate-500">Tax Regimes:</span>
+                <span className="text-slate-200 font-medium truncate">{activeTaxCategory.taxRegimeOptions[0]}</span>
+              </div>
             </div>
-          )}
+
+            <div className="pt-1 text-[10.5px] text-slate-400">
+              <span className="text-slate-500 font-medium">Mandatory Document Intake: </span>
+              <span className="text-slate-300">{activeTaxCategory.requiredDocs.join(' • ')}</span>
+            </div>
+          </div>
         </div>
       )
+    }
 
     case 'prev_itr':
       return (

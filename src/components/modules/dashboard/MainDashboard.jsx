@@ -349,44 +349,64 @@ export default function MainDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredClients.map((client) => {
-                  const isCurrent = client.id === activeClient?.id
-                  return (
-                    <tr
-                      key={client.id}
-                      onClick={() => openClientWorkspace(client.id)}
-                      className={`hover:bg-slate-50/80 transition-colors cursor-pointer ${
-                        isCurrent ? 'bg-teal-50/30' : ''
-                      }`}
-                    >
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <img
-                            src={client.avatar}
-                            alt=""
-                            className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
-                          />
-                          <div className="min-w-0">
-                            <p className="font-semibold text-slate-900 flex items-center gap-1.5 truncate">
-                              {client.name}
-                              {isCurrent && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-teal-100 text-teal-800 font-bold">
-                                  ACTIVE
-                                </span>
-                              )}
-                            </p>
-                            <p className="text-[11px] text-slate-500 font-mono">
-                              {maskPAN(client.pan)} • {client.category.split(' - ')[0]}
-                            </p>
+                {filteredClients.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-400">
+                        <Users className="w-5 h-5" />
+                      </div>
+                      <p className="font-semibold text-slate-700 text-xs">No Taxpayers in Directory</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Onboard a client or seed statutory profiles in Firm & Client Operations.
+                      </p>
+                      <button
+                        onClick={() => navigate('/workspace/clients')}
+                        className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-500 transition-colors shadow-xs cursor-pointer"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span>Go to Taxpayer Directory</span>
+                      </button>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredClients.map((client) => {
+                    const isCurrent = client.id === activeClient?.id
+                    return (
+                      <tr
+                        key={client.id}
+                        onClick={() => openClientWorkspace(client.id)}
+                        className={`hover:bg-slate-50/80 transition-colors cursor-pointer ${
+                          isCurrent ? 'bg-teal-50/30' : ''
+                        }`}
+                      >
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2.5">
+                            <img
+                              src={client.avatar}
+                              alt=""
+                              className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="font-semibold text-slate-900 flex items-center gap-1.5 truncate">
+                                {client.name}
+                                {isCurrent && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-teal-100 text-teal-800 font-bold">
+                                    ACTIVE
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-[11px] text-slate-500 font-mono">
+                                {maskPAN(client.pan)} • {client.category?.split(' - ')[0] || client.category}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="py-3 px-3">
-                        <span className="font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono text-[11px]">
-                          {client.itrType}
-                        </span>
-                      </td>
+                        <td className="py-3 px-3">
+                          <span className="font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono text-[11px]">
+                            {client.itrType}
+                          </span>
+                        </td>
 
                       <td className="py-3 px-3">
                         <span
@@ -438,7 +458,7 @@ export default function MainDashboard() {
                       </td>
                     </tr>
                   )
-                })}
+                }))}
               </tbody>
             </table>
           </div>

@@ -354,7 +354,7 @@ export default function LandingPage() {
 
             {/* Bottom Bar inside Mockup */}
             <div className="px-5 py-3.5 bg-white border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-              <span className="text-slate-600 font-medium">6 pre-loaded demonstration taxpayer cases (Salaried, Professional 44ADA, HUF, Investor)</span>
+              <span className="text-slate-600 font-medium">Full statutory Indian tax taxonomy across Section 2(31) — Individual, HUF, Firm, LLP, Company, Trust (ITR-1 to ITR-7)</span>
               <button
                 onClick={() => handleLaunchApp('/dashboard')}
                 className="font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1 cursor-pointer"

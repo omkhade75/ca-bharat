@@ -11,13 +11,26 @@ import {
   Phone,
   Edit2,
   Copy,
-  Check
+  Check,
+  Trash2,
+  Sparkles,
+  RefreshCw,
+  AlertCircle,
+  Info,
 } from 'lucide-react'
 import { useApp } from '../../../context/AppContext'
 import { formatDate } from '../../../utils/formatters'
 import { WORKFLOW_STATUS_META } from '../../../utils/workflowHelper'
 import Badge from '../../common/Badge'
 import Modal from '../../common/Modal'
+import {
+  ENTITY_GROUPS,
+  STATUTORY_TAXPAYER_CATEGORIES,
+  getCategoryDetails,
+  getRecommendedItr,
+  getExpectedPan4thChar,
+  validatePanStructure,
+} from '../../../data/statutoryTaxpayerTypes'
 
 export default function FirmClientsModule() {
   const {
@@ -25,6 +38,9 @@ export default function FirmClientsModule() {
     activeClient,
     setActiveClientId,
     addClient,
+    deleteClient,
+    clearAllClients,
+    seedStatutoryTaxpayers,
     updateClient,
     grantConsent,
     getWorkflowStageForClient,
@@ -164,15 +180,39 @@ export default function FirmClientsModule() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {activeTab === 'CLIENTS' && (
-            <button
-              onClick={() => setIsAddClientOpen(true)}
-              className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-98"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Add Taxpayer Profile</span>
-            </button>
+            <>
+              <button
+                onClick={() => setIsAddClientOpen(true)}
+                className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-98"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Add Taxpayer Profile</span>
+              </button>
+              <button
+                onClick={() => seedStatutoryTaxpayers()}
+                title="Load 7 realistic statutory entities (Individual, HUF, Firm, LLP, Company, Trust)"
+                className="px-3 py-2 text-xs font-semibold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                <span>Seed Statutory Entities (7)</span>
+              </button>
+              {clients.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm('Are you sure you want to remove ALL taxpayer profiles and clear the directory?')) {
+                      clearAllClients()
+                    }
+                  }}
+                  title="Remove all present clients from directory"
+                  className="px-3 py-2 text-xs font-medium rounded-lg text-rose-700 hover:bg-rose-50 border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Remove All Clients</span>
+                </button>
+              )}
+            </>
           )}
           {activeTab === 'TEAM' && (
             <button
@@ -247,11 +287,34 @@ export default function FirmClientsModule() {
                 onChange={(e) => setCategoryFilter(e.target.value)}
                 className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 font-medium text-slate-700 focus:outline-hidden cursor-pointer"
               >
-                <option value="ALL">All Taxpayer Categories</option>
-                <option value="Salaried">Salaried Individuals</option>
-                <option value="Professional">Professionals (Sec 44ADA)</option>
-                <option value="HUF">HUF</option>
-                <option value="Investor">Investors / Traders</option>
+                <option value="ALL">All Statutory Categories (15 Types)</option>
+                <optgroup label="Individuals (Sec 2(31)(i))">
+                  <option value="Salaried">Salaried Individuals (ITR-1/2)</option>
+                  <option value="Professional">Professionals Sec 44ADA (ITR-4)</option>
+                  <option value="Business">Small Business Sec 44AD (ITR-4)</option>
+                  <option value="Capital Market">Capital Market Investors (ITR-2/3)</option>
+                  <option value="Senior">Senior Citizens (Age 60+)</option>
+                  <option value="Non-Resident">NRIs & Foreign Assets (ITR-2)</option>
+                </optgroup>
+                <optgroup label="Hindu Undivided Family (Sec 2(31)(ii))">
+                  <option value="HUF">Hindu Undivided Family (HUF - ITR-2)</option>
+                </optgroup>
+                <optgroup label="Partnership & LLPs (Sec 2(31)(iv))">
+                  <option value="Partnership">Partnership Firms (Sec 184 - ITR-5)</option>
+                  <option value="LLP">Limited Liability Partnerships (ITR-5)</option>
+                </optgroup>
+                <optgroup label="Companies (Sec 2(31)(iii))">
+                  <option value="Domestic Company">Domestic Companies (Pvt/Public Ltd - ITR-6)</option>
+                  <option value="Foreign Company">Foreign Companies (ITR-6)</option>
+                </optgroup>
+                <optgroup label="Trusts & Non-Profits (Sec 11/12)">
+                  <option value="Trust">Charitable Trusts & Sec 8 (ITR-7)</option>
+                </optgroup>
+                <optgroup label="Other Bodies (Sec 2(31)(v)-(vii))">
+                  <option value="Association of Persons">AOP / BOI (ITR-5)</option>
+                  <option value="Co-operative">Co-operative Societies (ITR-5)</option>
+                  <option value="Artificial Juridical">Local Authorities / AJP (ITR-5)</option>
+                </optgroup>
               </select>
 
               <select
@@ -302,154 +365,207 @@ export default function FirmClientsModule() {
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
-                    <th className="py-3 px-4">Client Name & PAN</th>
-                    <th className="py-3 px-3">Tax Category</th>
-                    <th className="py-3 px-3">Advisory Tier</th>
-                    <th className="py-3 px-3">Workflow Status</th>
-                    <th className="py-3 px-3">Consent</th>
-                    <th className="py-3 px-3">Docs Vault</th>
-                    <th className="py-3 px-3">Assigned Staff</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredClients.map((client) => {
-                    const isSelected = client.id === activeClient?.id
-                    return (
-                      <tr
-                        key={client.id}
-                        className={`hover:bg-slate-50 transition-colors ${
-                          isSelected ? 'bg-teal-50/30' : ''
-                        }`}
-                      >
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={client.avatar}
-                              alt=""
-                              className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
-                            />
-                            <div>
-                              <p className="font-semibold text-slate-900 flex items-center gap-1.5">
-                                {client.name}
-                                {isSelected && (
-                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-teal-100 text-teal-800 font-bold">
-                                    ACTIVE CONTEXT
-                                  </span>
-                                )}
-                              </p>
-                              <p className="text-[11px] text-slate-500 font-mono">
-                                PAN: <span className="font-semibold text-slate-700">{client.pan}</span>
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-3">
-                          <span className="font-medium text-slate-700">{client.category}</span>
-                          <p className="text-[10px] text-slate-400 truncate max-w-xs">{client.employer || 'Private practice'}</p>
-                        </td>
-
-                        <td className="py-3 px-3">
-                          <span
-                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                              client.tier === 'Platinum'
-                                ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                                : client.tier === 'Gold'
-                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                : 'bg-slate-100 text-slate-700 border border-slate-200'
-                            }`}
-                          >
-                            {client.tier}
-                          </span>
-                        </td>
-
-                        <td className="py-3 px-3">
-                          {(() => {
-                            const stage = getWorkflowStageForClient ? getWorkflowStageForClient(client) : client.status
-                            const meta = WORKFLOW_STATUS_META[stage]
-                            if (meta) {
-                              return (
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${meta.colorClasses}`}>
-                                  {meta.label}
-                                </span>
-                              )
-                            }
-                            return (
-                              <Badge variant="default" size="xs">
-                                {client.status}
-                              </Badge>
-                            )
-                          })()}
-                        </td>
-
-                        <td className="py-3 px-3">
-                          {client.consentStatus === 'Active' ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Consent Active (Demo)
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600">
-                              <Clock className="w-3.5 h-3.5" />
-                              Pending Renewal
-                            </span>
-                          )}
-                        </td>
-
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-semibold text-slate-800">{client.docsUploaded}</span>
-                            <span className="text-slate-400">/ {client.docsRequired}</span>
-                            {client.docsUploaded >= client.docsRequired ? (
-                              <CheckCircle2 className="w-3 h-3 text-teal-600" />
-                            ) : null}
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-3 text-slate-600">
-                          {client.assignedTo?.split(' (')[0]}
-                        </td>
-
-                        <td className="py-3 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => {
-                                setActiveClientId(client.id)
-                              }}
-                              title="Make this client active across all modules"
-                              className="px-2 py-1 text-[11px] font-semibold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-                            >
-                              Select
-                            </button>
-                            <button
-                              onClick={() => openEditModal(client)}
-                              title="Edit Taxpayer Information"
-                              className="px-2 py-1 text-[11px] font-semibold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer flex items-center gap-1"
-                            >
-                              <Edit2 className="w-3 h-3 text-slate-500" />
-                              <span>Edit</span>
-                            </button>
-                            <button
-                              onClick={() => openClientDrawer(client)}
-                              className="px-2 py-1 text-[11px] font-semibold rounded bg-teal-50 hover:bg-teal-100 text-teal-700 transition-colors cursor-pointer"
-                            >
-                              Profile
-                            </button>
-                          </div>
+          {clients.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-xs">
+              <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
+                <Users className="w-7 h-7" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900 mb-1">Firm Taxpayer Directory is Empty</h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto mb-6 leading-relaxed">
+                All previous demonstration clients have been removed. Onboard a taxpayer profile under any category of the Indian Income-tax Act, 1961 (Individual, HUF, Firm, LLP, Company, Trust), or seed sample statutory profiles to test the platform.
+              </p>
+              <div className="flex items-center justify-center gap-3 flex-wrap">
+                <button
+                  onClick={() => setIsAddClientOpen(true)}
+                  className="px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>+ Onboard Taxpayer Profile</span>
+                </button>
+                <button
+                  onClick={() => seedStatutoryTaxpayers()}
+                  className="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Seed Statutory Demo Profiles (7 Entities)</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
+                      <th className="py-3 px-4">Client Name & PAN</th>
+                      <th className="py-3 px-3">Tax Category</th>
+                      <th className="py-3 px-3">Advisory Tier</th>
+                      <th className="py-3 px-3">Workflow Status</th>
+                      <th className="py-3 px-3">Consent</th>
+                      <th className="py-3 px-3">Docs Vault</th>
+                      <th className="py-3 px-3">Assigned Staff</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredClients.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-8 text-center text-slate-500">
+                          <p className="font-semibold text-slate-700">No matching taxpayers found</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">Try resetting the category filter or search query.</p>
                         </td>
                       </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                    ) : (
+                      filteredClients.map((client) => {
+                        const isSelected = client.id === activeClient?.id
+                        return (
+                          <tr
+                            key={client.id}
+                            className={`hover:bg-slate-50 transition-colors ${
+                              isSelected ? 'bg-teal-50/30' : ''
+                            }`}
+                          >
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={client.avatar}
+                                  alt=""
+                                  className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
+                                />
+                                <div>
+                                  <p className="font-semibold text-slate-900 flex items-center gap-1.5">
+                                    {client.name}
+                                    {isSelected && (
+                                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-teal-100 text-teal-800 font-bold">
+                                        ACTIVE CONTEXT
+                                      </span>
+                                    )}
+                                  </p>
+                                  <p className="text-[11px] text-slate-500 font-mono">
+                                    PAN: <span className="font-semibold text-slate-700">{client.pan}</span>
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-medium text-slate-700">{client.category}</span>
+                                <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-mono font-semibold border border-slate-200">
+                                  {client.itrType || getRecommendedItr(client.category)}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 truncate max-w-xs">{client.employer || 'Self'}</p>
+                            </td>
+
+                            <td className="py-3 px-3">
+                              <span
+                                className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                                  client.tier === 'Platinum'
+                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                    : client.tier === 'Gold'
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                }`}
+                              >
+                                {client.tier}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-3">
+                              {(() => {
+                                const stage = getWorkflowStageForClient ? getWorkflowStageForClient(client) : client.status
+                                const meta = WORKFLOW_STATUS_META[stage]
+                                if (meta) {
+                                  return (
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${meta.colorClasses}`}>
+                                      {meta.label}
+                                    </span>
+                                  )
+                                }
+                                return (
+                                  <Badge variant="default" size="xs">
+                                    {client.status}
+                                  </Badge>
+                                )
+                              })()}
+                            </td>
+
+                            <td className="py-3 px-3">
+                              {client.consentStatus === 'Active' ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Consent Active (Demo)
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600">
+                                  <Clock className="w-3.5 h-3.5" />
+                                  Pending Renewal
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-slate-800">{client.docsUploaded}</span>
+                                <span className="text-slate-400">/ {client.docsRequired}</span>
+                                {client.docsUploaded >= client.docsRequired ? (
+                                  <CheckCircle2 className="w-3 h-3 text-teal-600" />
+                                ) : null}
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3 text-slate-600">
+                              {client.assignedTo?.split(' (')[0]}
+                            </td>
+
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setActiveClientId(client.id)
+                                  }}
+                                  title="Make this client active across all modules"
+                                  className="px-2 py-1 text-[11px] font-semibold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                                >
+                                  Select
+                                </button>
+                                <button
+                                  onClick={() => openEditModal(client)}
+                                  title="Edit Taxpayer Information"
+                                  className="px-2 py-1 text-[11px] font-semibold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer flex items-center gap-1"
+                                >
+                                  <Edit2 className="w-3 h-3 text-slate-500" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  onClick={() => openClientDrawer(client)}
+                                  className="px-2 py-1 text-[11px] font-semibold rounded bg-teal-50 hover:bg-teal-100 text-teal-700 transition-colors cursor-pointer"
+                                >
+                                  Profile
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Remove taxpayer "${client.name}" (${client.pan}) from firm directory?`)) {
+                                      deleteClient(client.id)
+                                    }
+                                  }}
+                                  title="Delete taxpayer profile"
+                                  className="p-1.5 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -707,16 +823,24 @@ export default function FirmClientsModule() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Taxpayer Category</label>
+              <label className="block font-semibold text-slate-700 mb-1">Taxpayer Category (Sec 2(31) IT Act)</label>
               <select
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden cursor-pointer"
               >
-                <option value="Individual - Salaried">Individual - Salaried</option>
-                <option value="Individual - Professional (Sec 44ADA)">Individual - Professional (Sec 44ADA)</option>
-                <option value="Individual - Trader & Investor">Individual - Trader & Investor</option>
-                <option value="HUF (Hindu Undivided Family)">HUF (Hindu Undivided Family)</option>
+                {ENTITY_GROUPS.map((group) => {
+                  const groupCategories = STATUTORY_TAXPAYER_CATEGORIES.filter((c) => c.groupId === group.id)
+                  return (
+                    <optgroup key={group.id} label={group.label}>
+                      {groupCategories.map((c) => (
+                        <option key={c.id} value={c.category}>
+                          {c.category} • {c.recommendedItr}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )
+                })}
               </select>
             </div>
             <div>
@@ -732,6 +856,42 @@ export default function FirmClientsModule() {
               </select>
             </div>
           </div>
+
+          {/* Statutory Entity Guidance Banner */}
+          {(() => {
+            const cat = getCategoryDetails(formData.category)
+            const panCheck = validatePanStructure(formData.pan, formData.category)
+            return (
+              <div className="space-y-2">
+                <div className="bg-blue-50/70 border border-blue-200 rounded-lg p-2.5 text-[11px] space-y-1">
+                  <div className="flex items-center justify-between font-semibold text-blue-950">
+                    <span className="flex items-center gap-1.5">
+                      <Info className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                      Statutory Authority: {cat.statutorySection}
+                    </span>
+                    <span className="px-2 py-0.5 rounded font-mono font-bold bg-blue-100 text-blue-800 text-[10px] border border-blue-200">
+                      Recommended: {cat.recommendedItr}
+                    </span>
+                  </div>
+                  <p className="text-slate-600 text-[10.5px] leading-relaxed">
+                    {cat.governingRules}
+                  </p>
+                  <div className="flex items-center gap-3 text-[10px] text-slate-500 pt-1 border-t border-blue-100 flex-wrap">
+                    <span>PAN 4th Letter: <strong className="text-slate-800 font-mono">'{cat.pan4thChar}'</strong></span>
+                    <span>•</span>
+                    <span>Required Intake: <strong className="text-slate-700">{cat.requiredDocs.slice(0, 3).join(', ')}</strong></span>
+                  </div>
+                </div>
+
+                {formData.pan.length >= 4 && panCheck.warning && (
+                  <div className="text-[10.5px] text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200 flex items-start gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                    <span>{panCheck.message}</span>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           <div>
             <label className="block font-semibold text-slate-700 mb-1">Employer / Business Name & TAN</label>
@@ -822,16 +982,24 @@ export default function FirmClientsModule() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Taxpayer Category</label>
+              <label className="block font-semibold text-slate-700 mb-1">Taxpayer Category (Sec 2(31))</label>
               <select
                 value={editFormData.category}
                 onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden cursor-pointer"
               >
-                <option value="Individual - Salaried">Individual - Salaried</option>
-                <option value="Individual - Professional (Sec 44ADA)">Individual - Professional (Sec 44ADA)</option>
-                <option value="Individual - Trader & Investor">Individual - Trader & Investor</option>
-                <option value="HUF (Hindu Undivided Family)">HUF (Hindu Undivided Family)</option>
+                {ENTITY_GROUPS.map((group) => {
+                  const groupCategories = STATUTORY_TAXPAYER_CATEGORIES.filter((c) => c.groupId === group.id)
+                  return (
+                    <optgroup key={group.id} label={group.label}>
+                      {groupCategories.map((c) => (
+                        <option key={c.id} value={c.category}>
+                          {c.category} • {c.recommendedItr}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )
+                })}
               </select>
             </div>
             <div>
@@ -847,6 +1015,24 @@ export default function FirmClientsModule() {
               </select>
             </div>
           </div>
+
+          {/* Statutory Entity Guidance */}
+          {(() => {
+            const cat = getCategoryDetails(editFormData.category)
+            return (
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-[11px] space-y-1">
+                <div className="flex items-center justify-between font-semibold text-slate-900">
+                  <span>Statutory Authority: {cat.statutorySection}</span>
+                  <span className="px-2 py-0.5 rounded font-mono font-bold bg-blue-100 text-blue-800 text-[10px]">
+                    Recommended: {cat.recommendedItr}
+                  </span>
+                </div>
+                <p className="text-slate-500 text-[10.5px]">
+                  {cat.governingRules}
+                </p>
+              </div>
+            )
+          })()}
 
           <div>
             <label className="block font-semibold text-slate-700 mb-1">Employer / Business Name</label>
