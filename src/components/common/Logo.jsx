@@ -1,14 +1,14 @@
 import React from 'react'
 
 /**
- * Premium Bespoke Brand Logo for CA Bharat AI
+ * CA Bharat AI — Simple Light Modern Brand Logo
  * 
- * Visual Architecture:
- * - Sovereign Hexagonal Shield: Institutional audit security & DPDP compliance bedrock
- * - The "C" (Left Ribbon): Golden Chartered Accountancy trust, ICAI heritage & statutory vigilance
- * - The "A" (Right Apex): Sovereign ascending apex representing technological intelligence & national growth
- * - The Central Reconciliation Diamond: The emerald node of debits, credits, and 3-way tax alignment
- * - Sovereign Indian Tri-chromatic Resonance: Deep Saffron (#F59E0B), Titanium White (#FFFFFF), Reconciled Emerald (#10B981) on Royal Midnight Navy (#070E22)
+ * Aesthetic Philosophy:
+ * - Light, Airy & Luminous: Crisp pure-white squircle with delicate rose-blush hairline
+ * - The "C" (Left Arc): Warm rose-coral to golden saffron gradient (#F43F5E -> #FB7185 -> #F59E0B)
+ * - The "A" (Right Apex): Sovereign royal blue & azure precision (#38BDF8 -> #2563EB)
+ * - The Center Spark: Reconciled emerald core (#10B981) uniting Debits, Credits & 3-Way Audit
+ * - Simple, human, and memorable at 24px, 38px, and 180px
  */
 
 export function LogoMark({ size = 38, className = '' }) {
@@ -22,112 +22,83 @@ export function LogoMark({ size = 38, className = '' }) {
       className={`shrink-0 ${className}`}
     >
       <defs>
-        {/* Shield Deep Midnight Navy Gradient */}
-        <linearGradient id="cabh-shield-bg" x1="6" y1="4" x2="42" y2="44" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#080E24" />
-          <stop offset="50%" stopColor="#0D1838" />
-          <stop offset="100%" stopColor="#050917" />
+        {/* Light Crisp Background Gradient: Pure White with subtle soft Rose-Blush base */}
+        <linearGradient id="cabh-light-card-bg" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FFFFFF" />
+          <stop offset="70%" stopColor="#FFFFFF" />
+          <stop offset="100%" stopColor="#FFF1F2" />
         </linearGradient>
 
-        {/* Shield Subtle Precision Border: Saffron Gold into Deep Royal Blue */}
-        <linearGradient id="cabh-border-grad" x1="8" y1="5" x2="40" y2="43" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#F59E0B" />
-          <stop offset="30%" stopColor="#D97706" />
-          <stop offset="65%" stopColor="#2563EB" />
-          <stop offset="100%" stopColor="#059669" />
+        {/* Delicate Light Pink/Rose Hairline Border */}
+        <linearGradient id="cabh-light-border" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FDA4AF" />
+          <stop offset="40%" stopColor="#FCD34D" />
+          <stop offset="75%" stopColor="#93C5FD" />
+          <stop offset="100%" stopColor="#A7F3D0" />
         </linearGradient>
 
-        {/* Golden "C" Ribbon Gradient */}
-        <linearGradient id="cabh-gold-c" x1="12" y1="14" x2="24" y2="34" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#FEF08A" />
-          <stop offset="35%" stopColor="#F59E0B" />
-          <stop offset="100%" stopColor="#B45309" />
+        {/* Warm Rose-Coral to Saffron "C" Gradient */}
+        <linearGradient id="cabh-rose-c" x1="12" y1="14" x2="24" y2="34" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FB7185" />
+          <stop offset="45%" stopColor="#F43F5E" />
+          <stop offset="100%" stopColor="#F59E0B" />
         </linearGradient>
 
-        {/* Azure-Indigo "A" Apex Gradient */}
+        {/* Crisp Azure-Indigo "A" Gradient */}
         <linearGradient id="cabh-azure-a" x1="25" y1="13" x2="37" y2="35" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#BAE6FD" />
-          <stop offset="30%" stopColor="#38BDF8" />
-          <stop offset="70%" stopColor="#2563EB" />
-          <stop offset="100%" stopColor="#1E3A8A" />
+          <stop offset="0%" stopColor="#38BDF8" />
+          <stop offset="50%" stopColor="#2563EB" />
+          <stop offset="100%" stopColor="#1D4ED8" />
         </linearGradient>
 
         {/* Reconciled Emerald Core Diamond */}
         <linearGradient id="cabh-emerald-diamond" x1="22" y1="21" x2="26" y2="27" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#34D399" />
-          <stop offset="50%" stopColor="#10B981" />
-          <stop offset="100%" stopColor="#047857" />
+          <stop offset="100%" stopColor="#059669" />
         </linearGradient>
 
-        {/* Subtle Ambient Radial Glow */}
-        <radialGradient id="cabh-ambient-glow" cx="24" cy="24" r="16" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.12" />
-          <stop offset="60%" stopColor="#2563EB" stopOpacity="0.06" />
-          <stop offset="100%" stopColor="#080E24" stopOpacity="0" />
-        </radialGradient>
+        {/* Soft Drop Shadow for physical elevation */}
+        <filter id="cabh-light-shadow" x="0" y="1" width="48" height="48" filterUnits="userSpaceOnUse">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" floodColor="#F43F5E" floodOpacity="0.12" />
+          <feDropShadow dx="0" dy="1" stdDeviation="1" floodColor="#0F172A" floodOpacity="0.06" />
+        </filter>
       </defs>
 
-      {/* 1. Sovereign Hexagonal Shield Bedrock */}
-      <path
-        d="M 24 4.5 
-           C 24.8 4.5 25.6 4.9 26.2 5.3 
-           L 39.8 13.8 
-           C 40.8 14.4 41.5 15.5 41.5 16.8 
-           L 41.5 31.2 
-           C 41.5 32.5 40.8 33.6 39.8 34.2 
-           L 26.2 42.7 
-           C 24.8 43.5 23.2 43.5 21.8 42.7 
-           L 8.2 34.2 
-           C 7.2 33.6 6.5 32.5 6.5 31.2 
-           L 6.5 16.8 
-           C 6.5 15.5 7.2 14.4 8.2 13.8 
-           L 21.8 5.3 
-           C 22.4 4.9 23.2 4.5 24 4.5 Z"
-        fill="url(#cabh-shield-bg)"
-        stroke="url(#cabh-border-grad)"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
+      {/* 1. Luminous Squircle Canvas */}
+      <rect
+        x="3"
+        y="3"
+        width="42"
+        height="42"
+        rx="11"
+        fill="url(#cabh-light-card-bg)"
+        stroke="url(#cabh-light-border)"
+        strokeWidth="1.25"
+        filter="url(#cabh-light-shadow)"
       />
 
-      {/* 2. Soft Ambient Radial Glow within Shield */}
-      <circle cx="24" cy="24" r="16" fill="url(#cabh-ambient-glow)" />
-
-      {/* 3. Subtle Hexagonal Inner Hairline */}
-      <path
-        d="M 24 8 
-           L 37.5 16.5 
-           L 37.5 31.5 
-           L 24 40 
-           L 10.5 31.5 
-           L 10.5 16.5 Z"
-        stroke="#1E293B"
-        strokeWidth="0.8"
-        strokeDasharray="2.5 2.5"
-        opacity="0.75"
-      />
-
-      {/* 4. Left Architectural Wing: The "C" (Golden Chartered Accounting Standard) */}
+      {/* 2. Left Monogram Arc: The "C" (Chartered Accounting & Human Care) */}
       <path
         d="M 22.5 15.5 
-           C 16.8 15.5 13 19.2 13 24 
-           C 13 28.8 16.8 32.5 22.5 32.5"
-        stroke="url(#cabh-gold-c)"
-        strokeWidth="3.2"
+           C 16.5 15.5 12.5 19.2 12.5 24 
+           C 12.5 28.8 16.5 32.5 22.5 32.5"
+        stroke="url(#cabh-rose-c)"
+        strokeWidth="3.4"
         strokeLinecap="round"
       />
 
-      {/* 5. Right Architectural Apex: The "A" (Ascending Technological Intelligence) */}
+      {/* 3. Right Monogram Apex: The "A" (AI Intelligence & Ascending Sovereign Growth) */}
       <path
         d="M 25.5 32.5 
            L 31 15.5 
            L 36.5 32.5"
         stroke="url(#cabh-azure-a)"
-        strokeWidth="3.2"
+        strokeWidth="3.4"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
 
-      {/* 6. Precision "A" Crossbar */}
+      {/* 4. Precision "A" Crossbar */}
       <path
         d="M 27.5 27.5 L 34.5 27.5"
         stroke="#60A5FA"
@@ -135,31 +106,31 @@ export function LogoMark({ size = 38, className = '' }) {
         strokeLinecap="round"
       />
 
-      {/* 7. Central Horizon Reconciliation Axis (Balance of Debits & Credits) */}
+      {/* 5. Horizontal Reconciliation Axis (Debits = Credits) */}
       <line
-        x1="18.5"
+        x1="18"
         y1="24"
         x2="28"
         y2="24"
-        stroke="#FFFFFF"
-        strokeWidth="1.4"
+        stroke="#FB7185"
+        strokeWidth="1.2"
         strokeDasharray="1.5 1.5"
-        opacity="0.85"
+        opacity="0.75"
       />
 
-      {/* 8. Central Reconciled Emerald Diamond (Section 143(1) Matched Node) */}
+      {/* 6. Central Reconciled Emerald Diamond */}
       <polygon
-        points="24,20.5 27,24 24,27.5 21,24"
+        points="24,20.8 26.8,24 24,27.2 21.2,24"
         fill="url(#cabh-emerald-diamond)"
-        stroke="#ECFDF5"
-        strokeWidth="0.9"
+        stroke="#FFFFFF"
+        strokeWidth="0.8"
       />
 
-      {/* 9. Titanium White Center Spark */}
+      {/* 7. Titanium Center Core Spark */}
       <circle cx="24" cy="24" r="1.1" fill="#FFFFFF" />
 
-      {/* 10. Sovereign Apex Finial (Growth & Prosperity Star) */}
-      <circle cx="31" cy="12.5" r="1.2" fill="#FDE047" />
+      {/* 8. Golden Apex Star Accent */}
+      <circle cx="31" cy="12.5" r="1.2" fill="#F59E0B" />
     </svg>
   )
 }
@@ -167,7 +138,7 @@ export function LogoMark({ size = 38, className = '' }) {
 export default function Logo({
   size = 'md', // 'sm' | 'md' | 'lg' | 'xl'
   variant = 'full', // 'full' | 'icon' | 'horizontal'
-  theme = 'dark', // 'dark' | 'light'
+  theme = 'light', // 'light' | 'dark'
   className = '',
 }) {
   const pixelSizes = {
@@ -189,8 +160,8 @@ export default function Logo({
     <div className={`flex items-center gap-3 select-none ${className}`}>
       <div className="relative shrink-0 flex items-center justify-center">
         <LogoMark size={px} />
-        {/* Crisp subtle halo backdrop */}
-        <div className="absolute inset-0 rounded-2xl bg-amber-500/10 blur-sm -z-10 pointer-events-none" />
+        {/* Soft, light rose ambient glow */}
+        <div className="absolute inset-0 rounded-2xl bg-rose-400/10 blur-sm -z-10 pointer-events-none" />
       </div>
 
       <div className="min-w-0">
@@ -204,10 +175,10 @@ export default function Logo({
             CA Bharat
           </span>
           <span
-            className={`text-[9.5px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md shadow-xs ${
+            className={`text-[9.5px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md shadow-2xs ${
               isDark
-                ? 'bg-slate-800 text-amber-400 border border-slate-700/80'
-                : 'bg-amber-50 text-amber-900 border border-amber-200/90'
+                ? 'bg-rose-950/70 text-rose-300 border border-rose-800/80'
+                : 'bg-rose-50 text-rose-700 border border-rose-200'
             }`}
           >
             AI

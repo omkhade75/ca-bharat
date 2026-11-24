@@ -92,11 +92,11 @@ export default function SimpleWorkflowOverview({ onSwitchToFullSpec, onOpenCompa
   return (
     <div className="space-y-16">
       {/* 1. SHORT & SIMPLE HERO EXPLAINER */}
-      <section className="relative rounded-3xl bg-linear-to-b from-white via-slate-50 to-amber-50/30 border border-slate-200/90 p-6 sm:p-10 shadow-xs">
+      <section className="relative rounded-3xl bg-gradient-to-b from-white via-[#FFF8F9]/50 to-rose-50/30 border border-rose-100/90 p-6 sm:p-10 shadow-xs">
         <div className="max-w-4xl space-y-6">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 text-amber-400 text-xs font-semibold shadow-2xs">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-50 text-rose-800 border border-rose-200/90 text-xs font-semibold shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
             <span className="font-mono text-[10px] tracking-wider uppercase">
               CA BHARAT AI • SIMPLE PRODUCT OVERVIEW
             </span>
@@ -137,18 +137,18 @@ export default function SimpleWorkflowOverview({ onSwitchToFullSpec, onOpenCompa
               </p>
             </div>
 
-            {/* Engine 2 */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:border-amber-400 transition-all">
-              <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+            {/* Engine 2 with Soft Rose Tint */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-rose-50/40 via-white to-pink-50/20 border border-rose-100/90 shadow-2xs hover:border-rose-300 transition-all">
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-rose-100/60">
                 <div className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-lg bg-amber-600 text-white font-mono font-bold flex items-center justify-center text-xs">
+                  <span className="w-7 h-7 rounded-lg bg-rose-600 text-white font-mono font-bold flex items-center justify-center text-xs">
                     E2
                   </span>
-                  <span className="text-xs font-bold text-amber-900 uppercase tracking-wider">
+                  <span className="text-xs font-bold text-rose-900 uppercase tracking-wider">
                     Engine 2: Client Advisory Eye-Opener
                   </span>
                 </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-200">
                   Advisory Retention
                 </span>
               </div>

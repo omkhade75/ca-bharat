@@ -180,17 +180,17 @@ export default function LandingPage() {
       </header>
 
       {/* 3. HERO SECTION (PRODUCT VISION & ALIGNMENT) */}
-      <section className="relative overflow-hidden pt-12 pb-16 md:pt-20 md:pb-24 border-b border-amber-200/50 bg-gradient-to-b from-amber-50/60 via-[#FDFBF7] to-blue-50/40">
-        <div className="absolute top-6 left-1/4 w-80 h-80 bg-amber-200/25 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-12 right-1/4 w-80 h-80 bg-blue-200/25 rounded-full blur-3xl pointer-events-none" />
+      <section className="relative overflow-hidden pt-12 pb-16 md:pt-20 md:pb-24 border-b border-rose-100/70 bg-gradient-to-b from-rose-50/40 via-[#FDFBF9] to-blue-50/30">
+        <div className="absolute top-6 left-1/4 w-80 h-80 bg-rose-200/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-12 right-1/4 w-80 h-80 bg-blue-200/20 rounded-full blur-3xl pointer-events-none" />
 
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6 relative z-10">
-          {/* Category Pill */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/90 backdrop-blur-xs border border-amber-200 text-slate-800 text-xs shadow-2xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-600" />
+          {/* Category Pill with Soft Rose Tint */}
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/95 backdrop-blur-xs border border-rose-200/80 text-slate-800 text-xs shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-rose-500" />
             <span className="font-bold text-slate-900">CA-Led Tax Workflow & Personal Finance Platform</span>
-            <span className="text-amber-400">|</span>
-            <span className="text-amber-900 font-semibold">AY 2025-26 Prototype</span>
+            <span className="text-rose-300">|</span>
+            <span className="text-rose-900 font-semibold">AY 2025-26 Prototype</span>
           </div>
 
           {/* Main Headline */}
@@ -438,12 +438,12 @@ export default function LandingPage() {
             </div>
 
             {/* ENGINE 2: PERSONAL FINANCE INSIGHT & ADVISORY */}
-            <div className="p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-amber-50/80 via-white to-orange-50/30 border border-amber-200 shadow-xs space-y-5">
+            <div className="p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-rose-50/70 via-white to-pink-50/30 border border-rose-200/90 shadow-xs space-y-5">
               <div className="flex items-center justify-between">
-                <div className="w-11 h-11 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 shadow-2xs">
+                <div className="w-11 h-11 rounded-xl bg-rose-100 border border-rose-300 flex items-center justify-center text-rose-800 shadow-2xs">
                   <Sparkles className="w-5 h-5" />
                 </div>
-                <span className="px-3 py-1 rounded-full bg-amber-100/80 text-amber-950 border border-amber-300 text-[11px] font-bold">
+                <span className="px-3 py-1 rounded-full bg-rose-100/80 text-rose-950 border border-rose-300 text-[11px] font-bold">
                   Engine 2: Personal Finance Insight
                 </span>
               </div>
@@ -457,23 +457,23 @@ export default function LandingPage() {
 
               <div className="space-y-3 text-xs text-slate-700">
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <Check className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   <span><strong>Annual Financial Snapshot:</strong> Consolidated annual overview of earnings, direct taxes deposited, savings, and net wealth indicators.</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                  <span><strong>Income & Savings Analysis:</strong> Transparent living expenses formula: <code className="bg-amber-100/60 px-1 py-0.5 rounded text-amber-950 font-mono text-[11px]">Gross Inflow − Taxes − Documented Savings</code>.</span>
+                  <Check className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <span><strong>Income & Savings Analysis:</strong> Transparent living expenses formula: <code className="bg-rose-100/60 px-1 py-0.5 rounded text-rose-950 font-mono text-[11px]">Gross Inflow − Taxes − Documented Savings</code>.</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <Check className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   <span><strong>Section 80CCD(1B) NPS Opportunity:</strong> Illustrative tax-saving planning heuristic subject to applicable tax regime selection and CA review.</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <Check className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   <span><strong>Idle Cash Sweep Modeling:</strong> Estimates low-yield savings balance and models potential additional interest in 7% auto-sweep deposits.</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <Check className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   <span><strong>Section 234C Advance Tax Checks:</strong> Compliance timing verification on realized capital gains protecting clients from automated interest notices.</span>
                 </div>
                 <div className="flex items-start gap-2.5">

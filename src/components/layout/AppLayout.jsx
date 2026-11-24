@@ -7,7 +7,7 @@ export default function AppLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   return (
-    <div className="flex h-screen w-full bg-slate-50 text-slate-900 font-sans overflow-hidden">
+    <div className="flex h-screen w-full bg-gradient-to-br from-rose-50/30 via-[#FCFCFD] to-pink-50/20 text-slate-900 font-sans overflow-hidden">
       {/* Persistent Left Sidebar (Desktop) + Mobile Drawer */}
       <Sidebar
         isMobileOpen={isMobileMenuOpen}
@@ -17,7 +17,7 @@ export default function AppLayout() {
       {/* Main Content Pane */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <Topbar onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)} />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-gradient-to-b from-rose-50/20 via-transparent to-transparent">
           <div className="max-w-7xl mx-auto space-y-6">
             <Outlet />
           </div>

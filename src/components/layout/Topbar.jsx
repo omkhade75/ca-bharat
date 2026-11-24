@@ -87,7 +87,7 @@ export default function Topbar({ onToggleMobileMenu = () => {} }) {
   }
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200/90 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-20 shadow-xs">
+    <header className="h-16 bg-white/95 backdrop-blur-md border-b border-rose-100/80 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-20 shadow-2xs">
       {/* Left: Mobile Toggle, Brand on Mobile, Global Search & FY Selector */}
       <div className="flex items-center gap-3 flex-1 max-w-xl">
         {/* Mobile menu button */}
@@ -113,7 +113,7 @@ export default function Topbar({ onToggleMobileMenu = () => {} }) {
             placeholder="Search clients by name, PAN, mobile or case ID..."
             value={globalSearch}
             onChange={(e) => setGlobalSearch(e.target.value)}
-            className="w-full bg-slate-50 text-slate-800 text-xs rounded-lg pl-9 pr-4 py-2 border border-slate-200 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all placeholder:text-slate-400"
+            className="w-full bg-slate-50/80 text-slate-800 text-xs rounded-lg pl-9 pr-4 py-2 border border-slate-200/90 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-400 transition-all placeholder:text-slate-400"
           />
           {globalSearch && (
             <button
@@ -127,7 +127,7 @@ export default function Topbar({ onToggleMobileMenu = () => {} }) {
 
         {/* Assessment Year Selector */}
         <div className="hidden sm:flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100/80 rounded-lg p-1 border border-slate-200 shrink-0 transition-colors">
-          <Calendar className="w-3.5 h-3.5 text-amber-600 ml-1.5" />
+          <Calendar className="w-3.5 h-3.5 text-rose-600 ml-1.5" />
           <select
             value={activeAy}
             onChange={(e) => setActiveAy(e.target.value)}
@@ -142,9 +142,9 @@ export default function Topbar({ onToggleMobileMenu = () => {} }) {
 
       {/* Right: Quick Stats, Reset Demo, Notifications, Profile */}
       <div className="flex items-center gap-2.5 sm:gap-3">
-        {/* Prototype Demo Badge */}
-        <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#0B132B]/5 border border-amber-500/30 text-[10.5px] text-slate-800 font-semibold tracking-wide">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+        {/* Prototype Demo Badge with delicate Rose accent */}
+        <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-50/70 border border-rose-200/80 text-[10.5px] text-rose-900 font-semibold tracking-wide">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
           <span>Prototype Demo • Simulated Data</span>
         </div>
 

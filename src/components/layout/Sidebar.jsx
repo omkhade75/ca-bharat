@@ -101,10 +101,10 @@ export default function Sidebar({ isMobileOpen = false, onCloseMobile = () => {}
         {/* Operating Motto */}
         <div className="mt-3 px-2.5 py-1.5 rounded-lg bg-slate-800/70 border border-slate-700/60 text-[10.5px] text-slate-300 flex items-center justify-between">
           <div className="flex items-center gap-1.5 truncate">
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <ShieldCheck className="w-3.5 h-3.5 text-rose-400 shrink-0" />
             <span className="italic font-medium text-slate-300 truncate">"File better. Advise all year."</span>
           </div>
-          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
             PROTOTYPE
           </span>
         </div>
