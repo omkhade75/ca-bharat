@@ -18,6 +18,7 @@ import {
 import { useApp } from '../../../context/AppContext'
 import { formatDate } from '../../../utils/formatters'
 import Modal from '../../common/Modal'
+import ClientTaxDiscoveryWorkspace from '../firm-clients/ClientTaxDiscoveryWorkspace'
 
 export default function DocumentIntelligenceModule() {
   const navigate = useNavigate()
@@ -34,6 +35,7 @@ export default function DocumentIntelligenceModule() {
   const [selectedDocForPreview, setSelectedDocForPreview] = useState(null)
   const [selectedCitationForInspection, setSelectedCitationForInspection] = useState(null)
   const [extractionProgressStep, setExtractionProgressStep] = useState(0)
+  const [isTaxDiscoveryOpen, setIsTaxDiscoveryOpen] = useState(false)
 
   // Simulation steps
   const extractionSteps = [
@@ -274,6 +276,13 @@ export default function DocumentIntelligenceModule() {
                 <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-200/80 text-amber-900 border border-amber-300">
                   {activeClientDocs.length} / {activeClient?.docsRequired || 4} Uploaded
                 </span>
+                <button
+                  onClick={() => setIsTaxDiscoveryOpen(true)}
+                  className="px-3 py-1 rounded-lg bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 text-xs font-semibold shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Checklist & Discovery</span>
+                </button>
               </div>
             </div>
           )}
@@ -837,6 +846,15 @@ export default function DocumentIntelligenceModule() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* STEP 1: DYNAMIC STATUTORY CHECKLIST & TAX DISCOVERY */}
+      {activeClient && (
+        <ClientTaxDiscoveryWorkspace
+          client={activeClient}
+          isOpen={isTaxDiscoveryOpen}
+          onClose={() => setIsTaxDiscoveryOpen(false)}
+        />
       )}
     </div>
   )

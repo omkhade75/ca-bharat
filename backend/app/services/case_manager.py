@@ -5,7 +5,14 @@ Coordinates client records, extracted documents, 3-way reconciliation matrices, 
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from ..models.client_models import ClientProfile, TaxpayerCategoryEnum, DPDPConsentRecord, BankAccountDetails
+from ..models.client_models import (
+    ClientProfile,
+    TaxpayerCategoryEnum,
+    LegalTaxpayerTypeEnum,
+    IndividualOccupationEnum,
+    DPDPConsentRecord,
+    BankAccountDetails,
+)
 from ..models.reconciliation_models import ReconciliationMatrix
 from ..models.tax_models import RegimeComparisonResult, IncomeHeadDetails, DeductionsDetail
 from ..engine.reconciliation_engine import ReconciliationEngine
@@ -30,7 +37,9 @@ class CaseManager:
             id="c-001",
             pan="ABCPA1092F",
             name="Arun Kumar Verma",
-            category=TaxpayerCategoryEnum.INDIVIDUAL_SALARIED,
+            legal_type=LegalTaxpayerTypeEnum.INDIVIDUAL,
+            occupation_profile=IndividualOccupationEnum.SALARIED,
+            category="Individual - Salaried",
             recommended_itr="ITR-1 (Sahaj)",
             employer_or_trade_name="Tata Consultancy Services Ltd",
             tan="BLRT01928F",
@@ -84,12 +93,14 @@ class CaseManager:
         )
         self.tax_computations[arun.pan] = comp_arun
 
-        # Dr. Radhika Sen (Sec 44ADA Professional)
+        # Dr. Radhika Sen (Professional u/s 44ADA)
         radhika = ClientProfile(
             id="c-002",
             pan="ABCPR5491M",
             name="Dr. Radhika Sen",
-            category=TaxpayerCategoryEnum.INDIVIDUAL_PROFESSIONAL,
+            legal_type=LegalTaxpayerTypeEnum.INDIVIDUAL,
+            occupation_profile=IndividualOccupationEnum.PROFESSIONAL,
+            category="Individual - Professional",
             recommended_itr="ITR-4 (Sugam)",
             employer_or_trade_name="Sen Super Speciality Dental Clinic",
             tan="DELF09281G",
@@ -302,6 +313,43 @@ class CaseManager:
                     "bank_ifsc": client.bank_details.ifsc_code if client.bank_details else None,
                     "bank_name": client.bank_details.bank_name if client.bank_details else None,
                     "status": getattr(client, "workflow_status", "Onboarding"),
+                    "legal_type": client.legal_type.value if hasattr(client.legal_type, "value") else str(client.legal_type),
+                    "occupation_profile": client.occupation_profile.value if hasattr(client.occupation_profile, "value") else str(client.occupation_profile),
+                    "residential_status": client.residential_status.value if hasattr(client.residential_status, "value") else str(client.residential_status),
+                    "dob_or_doi": client.dob_or_doi,
+                    "karta_name": client.karta_name,
+                    "karta_pan": client.karta_pan,
+                    "huf_deed_date": client.huf_deed_date,
+                    "entity_reg_no": client.entity_reg_no,
+                    "registered_office_address": client.registered_office_address,
+                    "responsible_person_name": client.responsible_person_name,
+                    "responsible_person_pan": client.responsible_person_pan,
+                    "responsible_person_designation": client.responsible_person_designation,
+                    "discovery_json": json.dumps(client.intake_discovery) if client.intake_discovery else None,
+                })
+            finally:
+                db.close()
+        except Exception:
+            pass
+        return client
+
+    def update_client_intake(self, pan: str, intake_discovery: Dict[str, Any]) -> Optional[ClientProfile]:
+        pan_upper = pan.upper()
+        client = self.get_client(pan_upper)
+        if not client:
+            return None
+        client.intake_discovery = intake_discovery
+        self.clients[pan_upper] = client
+        try:
+            import json
+            from ..db.session import SessionLocal
+            from ..db.repository import TaxpayerRepository
+            db = SessionLocal()
+            try:
+                repo = TaxpayerRepository(db)
+                repo.create_or_update_client({
+                    "pan": pan_upper,
+                    "discovery_json": json.dumps(intake_discovery),
                 })
             finally:
                 db.close()

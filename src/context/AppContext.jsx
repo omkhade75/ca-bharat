@@ -18,7 +18,11 @@ import {
   getRecommendedItr,
   getExpectedPan4thChar,
   validatePanStructure,
+  computeRecommendedItr,
+  LEGAL_TAXPAYER_ENTITIES,
+  INDIVIDUAL_OCCUPATION_PROFILES,
 } from '../data/statutoryTaxpayerTypes'
+import { DEFAULT_INTAKE_DISCOVERY, generateDynamicChecklist } from '../data/intakeSchema'
 
 const AppContext = createContext(null)
 
@@ -108,8 +112,16 @@ export function AppProvider({ children }) {
 
   // Client Actions
   const addClient = (clientData) => {
-    const categoryDetails = getCategoryDetails(clientData.category)
-    const recommendedItr = getRecommendedItr(clientData.category)
+    const legalType = clientData.legalType || 'INDIVIDUAL'
+    const occupationProfile = clientData.occupationProfile || 'SALARIED'
+    const intakeDiscovery = clientData.intakeDiscovery || DEFAULT_INTAKE_DISCOVERY
+    const recommendedItr = computeRecommendedItr(legalType, occupationProfile, intakeDiscovery)
+    const categoryDetails = getCategoryDetails(clientData.category || legalType)
+    
+    // Generate dynamic document checklist
+    const initialChecklist = generateDynamicChecklist({ ...clientData, legalType, occupationProfile }, intakeDiscovery)
+    const mandatoryCount = initialChecklist.filter((c) => c.mandatory).length
+
     const newId = `cli-${String(clients.length + 1).padStart(3, '0')}`
     const newClient = {
       id: newId,
@@ -118,12 +130,22 @@ export function AppProvider({ children }) {
       activeAY: activeAy,
       consentStatus: 'Pending',
       docsUploaded: 0,
-      docsRequired: categoryDetails?.requiredDocs?.length || 4,
+      docsRequired: mandatoryCount || 4,
       refundExpected: 0,
       discrepancyCount: 0,
+      legalType,
+      occupationProfile: legalType === 'INDIVIDUAL' ? occupationProfile : null,
+      residentialStatus: clientData.residentialStatus || 'RESIDENT',
+      dobOrDoi: clientData.dobOrDoi || '',
+      category: clientData.category || (legalType === 'INDIVIDUAL' ? `Individual - ${occupationProfile}` : legalType),
       itrType: recommendedItr,
-      assignedTo: 'Ananya Joshi (Senior Associate)',
+      assignedTo: clientData.assignedStaff || 'Ananya Joshi (Senior Associate)',
+      assignedPartner: clientData.assignedPartner || 'CA Rajesh Sharma (Partner)',
+      requestedService: clientData.requestedService || 'REGULAR_ITR',
+      isExistingClient: clientData.isExistingClient || false,
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      intakeDiscovery,
+      dynamicChecklist: initialChecklist,
       ...clientData,
     }
 
@@ -137,8 +159,8 @@ export function AppProvider({ children }) {
       financialYear: activeAy === 'AY 2025-26' ? 'FY 2024-25' : 'FY 2023-24',
       filingForm: recommendedItr,
       status: 'Consent Pending',
-      assignedCa: 'CA Rajesh Sharma (Partner)',
-      reviewerNotes: `New taxpayer onboarding for ${clientData.category} (${categoryDetails?.statutorySection || 'Income-tax Act, 1961'}). Awaiting DPDP digital consent and document upload.`,
+      assignedCa: newClient.assignedPartner,
+      reviewerNotes: `New taxpayer onboarding for ${newClient.category} (${legalType}). Initial recommended return: ${recommendedItr}.`,
       checklist: {
         panIdentityVerified: true,
         form16Reconciled: false,
@@ -147,25 +169,25 @@ export function AppProvider({ children }) {
         discrepanciesResolved: false,
       },
       incomes: {
-        salary: 0,
-        houseProperty: 0,
-        capitalGainsLTCG: 0,
-        capitalGainsSTCG: 0,
-        otherSources: 0,
+        salary: intakeDiscovery.salary?.hasIncome === 'YES' ? (intakeDiscovery.salary.employers?.[0]?.grossSalary || 0) : 0,
+        houseProperty: intakeDiscovery.houseProperty?.hasIncome === 'YES' ? (intakeDiscovery.houseProperty.properties?.[0]?.annualRentReceived || 0) : 0,
+        capitalGainsLTCG: intakeDiscovery.capitalGains?.hasIncome === 'YES' ? (intakeDiscovery.capitalGains.summary?.equityLtcg112A || 0) : 0,
+        capitalGainsSTCG: intakeDiscovery.capitalGains?.hasIncome === 'YES' ? (intakeDiscovery.capitalGains.summary?.equityStcg111A || 0) : 0,
+        otherSources: intakeDiscovery.otherSources?.hasIncome === 'YES' ? ((intakeDiscovery.otherSources.estimatedSavingsInterest || 0) + (intakeDiscovery.otherSources.estimatedDividends || 0)) : 0,
       },
       deductions: {
-        sec80C: 0,
-        sec80D: 0,
-        sec80CCD1B: 0,
+        sec80C: intakeDiscovery.deductions?.claimed80C || 0,
+        sec80D: intakeDiscovery.deductions?.claimed80DHealth || 0,
+        sec80CCD1B: intakeDiscovery.deductions?.claimed80CCD1B_NPS || 0,
         sec24b: 0,
         sec80TTA: 0,
       },
       taxesPaid: {
-        tdsSalary: 0,
+        tdsSalary: intakeDiscovery.salary?.employers?.[0]?.tdsDeducted || 0,
         tdsDividend: 0,
         advanceTax: 0,
         selfAssessmentTax: 0,
-        totalTds: 0,
+        totalTds: intakeDiscovery.salary?.employers?.[0]?.tdsDeducted || 0,
       },
       reconciliationMatrix: [],
       caApproval: {
@@ -205,12 +227,74 @@ export function AppProvider({ children }) {
     setActiveClientId(newId)
     addAuditLog(
       'CLIENT_CREATED',
-      `New taxpayer profile ${newClient.name} (${newClient.pan}) onboarded as "${newClient.category}" with recommended ${recommendedItr}.`,
+      `New taxpayer profile ${newClient.name} (${newClient.pan}) onboarded as ${legalType} (${newClient.category}) with recommended ${recommendedItr}.`,
       newClient.name,
       newClient.pan,
       'Intake'
     )
     return newId
+  }
+
+  // Update client intake questionnaire discovery answers & recalculate checklist
+  const updateClientIntake = (clientId, intakeDiscovery) => {
+    let updatedPan = ''
+    let updatedName = ''
+    let recommendedItr = 'ITR-1 (Sahaj)'
+
+    setClients((prev) =>
+      prev.map((c) => {
+        if (c.id === clientId) {
+          updatedPan = c.pan
+          updatedName = c.name
+          recommendedItr = computeRecommendedItr(c.legalType || 'INDIVIDUAL', c.occupationProfile, intakeDiscovery)
+          const newChecklist = generateDynamicChecklist(c, intakeDiscovery)
+          const mandatoryCount = newChecklist.filter((item) => item.mandatory && item.status !== 'WAIVED').length
+          return {
+            ...c,
+            intakeDiscovery,
+            itrType: recommendedItr,
+            dynamicChecklist: newChecklist,
+            docsRequired: mandatoryCount,
+          }
+        }
+        return c
+      })
+    )
+
+    // Also update corresponding tax case with any updated figures
+    setTaxCases((prev) =>
+      prev.map((tc) => {
+        if (tc.clientId === clientId) {
+          return {
+            ...tc,
+            filingForm: recommendedItr,
+            incomes: {
+              ...tc.incomes,
+              salary: intakeDiscovery.salary?.hasIncome === 'YES' ? (intakeDiscovery.salary.employers?.reduce((sum, e) => sum + (Number(e.grossSalary) || 0), 0) || 0) : 0,
+              houseProperty: intakeDiscovery.houseProperty?.hasIncome === 'YES' ? (intakeDiscovery.houseProperty.properties?.reduce((sum, p) => sum + (Number(p.annualRentReceived) || 0), 0) || 0) : 0,
+              capitalGainsLTCG: intakeDiscovery.capitalGains?.hasIncome === 'YES' ? (Number(intakeDiscovery.capitalGains.summary?.equityLtcg112A) || 0) : 0,
+              capitalGainsSTCG: intakeDiscovery.capitalGains?.hasIncome === 'YES' ? (Number(intakeDiscovery.capitalGains.summary?.equityStcg111A) || 0) : 0,
+              otherSources: intakeDiscovery.otherSources?.hasIncome === 'YES' ? ((Number(intakeDiscovery.otherSources.estimatedSavingsInterest) || 0) + (Number(intakeDiscovery.otherSources.estimatedDividends) || 0)) : 0,
+            },
+            deductions: {
+              ...tc.deductions,
+              sec80C: Number(intakeDiscovery.deductions?.claimed80C) || 0,
+              sec80D: Number(intakeDiscovery.deductions?.claimed80DHealth) || 0,
+              sec80CCD1B: Number(intakeDiscovery.deductions?.claimed80CCD1B_NPS) || 0,
+            },
+          }
+        }
+        return tc
+      })
+    )
+
+    addAuditLog(
+      'INTAKE_DISCOVERY_UPDATED',
+      `Updated 5-head income discovery and regenerated dynamic checklist for ${updatedName} (${updatedPan}). Form aligned to ${recommendedItr}.`,
+      updatedName,
+      updatedPan,
+      'Intake'
+    )
   }
 
   const deleteClient = (id) => {
@@ -716,6 +800,7 @@ export function AppProvider({ children }) {
         activeClientId,
         setActiveClientId,
         addClient,
+        updateClientIntake,
         deleteClient,
         clearAllClients,
         seedStatutoryTaxpayers,

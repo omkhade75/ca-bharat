@@ -38,7 +38,36 @@ def onboard_taxpayer(client: ClientProfile):
     case_manager.log_event(
         actor="CA Rajesh Sharma (Demo Partner)",
         action="TAXPAYER_ONBOARDED",
-        details=f"Onboarded {client.name} ({client.pan}) under category '{client.category.value}'.",
+        details=f"Onboarded {client.name} ({client.pan}) as {client.legal_type.value if hasattr(client.legal_type, 'value') else client.legal_type} ({client.category}).",
         pan=client.pan,
     )
     return saved
+
+@router.get("/{pan}/intake")
+def get_taxpayer_intake(pan: str):
+    """Retrieves 5-head income discovery, prior year info, and tax intake data."""
+    client = case_manager.get_client(pan)
+    if not client:
+        raise HTTPException(status_code=404, detail=f"Taxpayer with PAN {pan.upper()} not found.")
+    return {
+        "pan": client.pan,
+        "name": client.name,
+        "legal_type": client.legal_type,
+        "occupation_profile": client.occupation_profile,
+        "intake_discovery": client.intake_discovery or {},
+    }
+
+@router.put("/{pan}/intake")
+def update_taxpayer_intake(pan: str, intake_data: dict):
+    """Updates 5-head income discovery, prior year benchmark, and deduction claims."""
+    updated = case_manager.update_client_intake(pan, intake_data)
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Taxpayer with PAN {pan.upper()} not found.")
+    case_manager.log_event(
+        actor="Ananya Joshi (Senior Associate)",
+        action="INTAKE_DISCOVERY_UPDATED",
+        details=f"Updated tax discovery questionnaire and checklist for {updated.name} ({updated.pan}).",
+        pan=updated.pan,
+    )
+    return {"status": "SUCCESS", "pan": updated.pan, "intake_discovery": updated.intake_discovery}
+

@@ -24,6 +24,10 @@ class DBClientProfile(Base):
     id = Column(String(64), primary_key=True, index=True)
     pan = Column(String(10), unique=True, index=True, nullable=False)
     name = Column(String(128), nullable=False)
+    legal_type = Column(String(32), default="INDIVIDUAL")
+    occupation_profile = Column(String(32), nullable=True)
+    residential_status = Column(String(32), default="RESIDENT")
+    dob_or_doi = Column(String(32), nullable=True)
     category = Column(String(128), nullable=False)
     tier = Column(String(32), default="Silver")
     recommended_itr = Column(String(16), default="ITR-1")
@@ -31,6 +35,22 @@ class DBClientProfile(Base):
     mobile = Column(String(20), nullable=True)
     employer_or_trade_name = Column(String(128), nullable=True)
     tan = Column(String(10), nullable=True)
+
+    # HUF conditional fields
+    karta_name = Column(String(128), nullable=True)
+    karta_pan = Column(String(10), nullable=True)
+    huf_deed_date = Column(String(32), nullable=True)
+
+    # Firm / LLP / Company / Trust conditional fields
+    entity_reg_no = Column(String(64), nullable=True)
+    registered_office_address = Column(Text, nullable=True)
+    responsible_person_name = Column(String(128), nullable=True)
+    responsible_person_pan = Column(String(10), nullable=True)
+    responsible_person_designation = Column(String(64), nullable=True)
+
+    # Intake discovery & tax questions JSON
+    discovery_json = Column(Text, nullable=True)
+
     bank_account_no = Column(String(32), nullable=True)
     bank_ifsc = Column(String(16), nullable=True)
     bank_name = Column(String(64), nullable=True)

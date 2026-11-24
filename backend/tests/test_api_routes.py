@@ -55,3 +55,29 @@ def test_export_excel_workpaper():
     assert res.status_code == 200
     assert res.headers["content-type"] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     assert len(res.content) > 1000  # Non-empty binary xlsx
+
+def test_taxpayer_intake_workflow():
+    # 1. Fetch initial intake
+    res = client.get("/api/clients/ABCPA1092F/intake")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["pan"] == "ABCPA1092F"
+    assert data["legal_type"] == "INDIVIDUAL"
+    assert data["occupation_profile"] == "SALARIED"
+
+    # 2. Update 5-head income discovery answers
+    discovery_payload = {
+        "salary": {"hasIncome": "YES", "hasMultipleEmployers": "NO"},
+        "houseProperty": {"hasIncome": "NO"},
+        "businessProfession": {"hasIncome": "NO"},
+        "capitalGains": {"hasIncome": "YES", "tradedEquitiesOrMutualFunds": "YES"},
+        "otherSources": {"hasIncome": "YES", "hasDividends": "YES"},
+        "specialDisclosures": {"hasAgriculturalIncome": "NO", "hasCryptoOrVDA": "NO"},
+        "previousYear": {"priorItrForm": "ITR-1 (Sahaj)", "priorRegime": "NEW"}
+    }
+    update_res = client.put("/api/clients/ABCPA1092F/intake", json=discovery_payload)
+    assert update_res.status_code == 200
+    updated_data = update_res.json()
+    assert updated_data["status"] == "SUCCESS"
+    assert updated_data["intake_discovery"]["capitalGains"]["hasIncome"] == "YES"
+

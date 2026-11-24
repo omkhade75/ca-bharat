@@ -26,11 +26,17 @@ import Modal from '../../common/Modal'
 import {
   ENTITY_GROUPS,
   STATUTORY_TAXPAYER_CATEGORIES,
+  LEGAL_TAXPAYER_ENTITIES,
+  INDIVIDUAL_OCCUPATION_PROFILES,
+  RESIDENTIAL_STATUS_OPTIONS,
+  REQUESTED_SERVICES,
+  computeRecommendedItr,
   getCategoryDetails,
   getRecommendedItr,
   getExpectedPan4thChar,
   validatePanStructure,
 } from '../../../data/statutoryTaxpayerTypes'
+import ClientTaxDiscoveryWorkspace from './ClientTaxDiscoveryWorkspace'
 
 export default function FirmClientsModule() {
   const {
@@ -58,7 +64,9 @@ export default function FirmClientsModule() {
   const [isAddClientOpen, setIsAddClientOpen] = useState(false)
   const [isEditClientOpen, setIsEditClientOpen] = useState(false)
   const [isClientDetailsOpen, setIsClientDetailsOpen] = useState(false)
+  const [isTaxDiscoveryOpen, setIsTaxDiscoveryOpen] = useState(false)
   const [selectedClientForView, setSelectedClientForView] = useState(null)
+  const [selectedClientForDiscovery, setSelectedClientForDiscovery] = useState(null)
   const [isAddTeamMemberOpen, setIsAddTeamMemberOpen] = useState(false)
   const [copiedConsentId, setCopiedConsentId] = useState(null)
 
@@ -76,20 +84,44 @@ export default function FirmClientsModule() {
     status: 'Action Required',
   })
 
-  // New client form state
+  // New client form state (Compliant with Step 1 Discovery Requirements)
   const [formData, setFormData] = useState({
     name: '',
     pan: '',
-    aadhaarLast4: '',
+    legalType: 'INDIVIDUAL',
+    occupationProfile: 'SALARIED',
+    residentialStatus: 'RESIDENT',
+    dobOrDoi: '',
+    isExistingClient: false,
+    requestedService: 'REGULAR_ITR',
+    assignedPartner: 'CA Rajesh Sharma (Partner)',
+    assignedStaff: 'Ananya Joshi (Senior Associate)',
     email: '',
     phone: '',
-    category: 'Individual - Salaried',
-    employer: '',
     tier: 'Gold',
+    employer: '',
+    tan: '',
+    // HUF conditional fields
+    kartaName: '',
+    kartaPan: '',
+    hufDeedDate: '',
+    // Entity conditional fields
+    entityRegNo: '',
+    registeredOffice: '',
+    responsiblePersonName: '',
+    responsiblePersonPan: '',
+    responsiblePersonDesignation: 'Managing Partner',
     address: '',
     city: 'Mumbai',
     state: 'Maharashtra',
+    pincode: '400001',
   })
+
+  // Real-time duplicate PAN detection
+  const duplicateClient = Boolean(formData.pan && formData.pan.length === 10)
+    ? clients.find((c) => c.pan?.toUpperCase() === formData.pan?.toUpperCase())
+    : null
+  const isDuplicatePan = Boolean(duplicateClient)
 
   // Filter clients
   const filteredClients = clients.filter((c) => {
@@ -110,22 +142,46 @@ export default function FirmClientsModule() {
       alert('Please provide client name and PAN.')
       return
     }
+    if (isDuplicatePan) {
+      alert(`Client with PAN ${formData.pan} is already registered as "${duplicateClient?.name}". Duplicate intake prevented.`)
+      return
+    }
     const newId = addClient(formData)
     setIsAddClientOpen(false)
     setFormData({
       name: '',
       pan: '',
-      aadhaarLast4: '',
+      legalType: 'INDIVIDUAL',
+      occupationProfile: 'SALARIED',
+      residentialStatus: 'RESIDENT',
+      dobOrDoi: '',
+      isExistingClient: false,
+      requestedService: 'REGULAR_ITR',
+      assignedPartner: 'CA Rajesh Sharma (Partner)',
+      assignedStaff: 'Ananya Joshi (Senior Associate)',
       email: '',
       phone: '',
-      category: 'Individual - Salaried',
-      employer: '',
       tier: 'Gold',
+      employer: '',
+      tan: '',
+      kartaName: '',
+      kartaPan: '',
+      hufDeedDate: '',
+      entityRegNo: '',
+      registeredOffice: '',
+      responsiblePersonName: '',
+      responsiblePersonPan: '',
+      responsiblePersonDesignation: 'Managing Partner',
       address: '',
       city: 'Mumbai',
       state: 'Maharashtra',
+      pincode: '400001',
     })
-    setSelectedClientForView(clients.find((c) => c.id === newId) || null)
+    const newlyCreated = clients.find((c) => c.id === newId) || { id: newId, ...formData }
+    setSelectedClientForView(newlyCreated)
+    // Prompt CA to proceed directly into Step 1 Tax Discovery
+    setSelectedClientForDiscovery(newlyCreated)
+    setIsTaxDiscoveryOpen(true)
   }
 
   const openClientDrawer = (client) => {
@@ -523,6 +579,17 @@ export default function FirmClientsModule() {
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
                                   onClick={() => {
+                                    setSelectedClientForDiscovery(client)
+                                    setIsTaxDiscoveryOpen(true)
+                                  }}
+                                  title="Step 1: Open Tax Discovery & 5-Income Heads Intake"
+                                  className="px-2.5 py-1 text-[11px] font-semibold rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                                >
+                                  <Sparkles className="w-3 h-3 text-rose-600" />
+                                  <span>Discovery</span>
+                                </button>
+                                <button
+                                  onClick={() => {
                                     setActiveClientId(client.id)
                                   }}
                                   title="Make this client active across all modules"
@@ -767,21 +834,35 @@ export default function FirmClientsModule() {
       <Modal
         isOpen={isAddClientOpen}
         onClose={() => setIsAddClientOpen(false)}
-        title="Onboard New Indian Taxpayer (Demo)"
-        subtitle="Create taxpayer profile, assign Assessment Year, and initiate consent demonstration intake"
-        maxWidth="max-w-xl"
+        title="Onboard New Indian Taxpayer"
+        subtitle="Step 1: Statutory entity classification, occupation profile, and case initiation"
+        maxWidth="max-w-2xl"
       >
         <form onSubmit={handleCreateClient} className="space-y-4 text-xs">
+          {/* Real-Time Duplicate PAN Alert Banner */}
+          {isDuplicatePan && (
+            <div className="bg-rose-50 border border-rose-300 rounded-xl p-3 text-rose-900 flex items-start gap-2.5 animate-shake">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-xs">Duplicate Client Warning</p>
+                <p className="text-[11px] text-rose-700 mt-0.5">
+                  Taxpayer with PAN <strong>{formData.pan}</strong> is already onboarded as "<strong>{duplicateClient?.name}</strong>" in the active firm directory. Please use existing case or modify PAN.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Section 1: Basic Identifiers */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Taxpayer Full Name *</label>
+              <label className="block font-semibold text-slate-700 mb-1">Taxpayer Full Legal Name *</label>
               <input
                 type="text"
                 required
                 placeholder="e.g. Ramesh K. Narayanan"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-teal-600"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-rose-500"
               />
             </div>
             <div>
@@ -793,12 +874,190 @@ export default function FirmClientsModule() {
                 placeholder="e.g. ABCPK9918F"
                 value={formData.pan}
                 onChange={(e) => setFormData({ ...formData, pan: e.target.value.toUpperCase() })}
-                className="w-full uppercase font-mono bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-teal-600"
+                className={`w-full uppercase font-mono bg-slate-50 border rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-hidden focus:ring-1 ${
+                  isDuplicatePan ? 'border-rose-400 focus:ring-rose-500 bg-rose-50/30' : 'border-slate-200 focus:ring-rose-500'
+                }`}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Section 2: Statutory Taxpayer Identification (Separated from Occupation Profile!) */}
+          <div className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-200/80 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Legal Taxpayer Entity (Section 2(31)) *
+                </label>
+                <select
+                  value={formData.legalType}
+                  onChange={(e) => setFormData({ ...formData, legalType: e.target.value })}
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden cursor-pointer"
+                >
+                  {LEGAL_TAXPAYER_ENTITIES.map((ent) => (
+                    <option key={ent.id} value={ent.id}>
+                      {ent.label} ({ent.statutorySection})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10.5px] text-slate-500 mt-1">
+                  Expected PAN 4th Character: <strong className="font-mono text-slate-700 font-bold">'{getExpectedPan4thChar(formData.legalType)}'</strong>
+                </p>
+              </div>
+
+              {/* Conditional Employment/Occupation Profile for Individuals */}
+              {formData.legalType === 'INDIVIDUAL' ? (
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    Occupation / Income Profile *
+                  </label>
+                  <select
+                    value={formData.occupationProfile}
+                    onChange={(e) => setFormData({ ...formData, occupationProfile: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden cursor-pointer"
+                  >
+                    {INDIVIDUAL_OCCUPATION_PROFILES.map((prof) => (
+                      <option key={prof.id} value={prof.id}>
+                        {prof.label} — {prof.defaultRecommendedItr}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10.5px] text-slate-500 mt-1">
+                    * Section 44AD/44ADA are evaluated as tax attributes in discovery, not entity types.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    Registration / CIN / Order Number
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={formData.legalType === 'COMPANY' ? 'e.g. U72200KA2015PTC082910' : 'e.g. MH-MUM-2012-009182'}
+                    value={formData.entityRegNo}
+                    onChange={(e) => setFormData({ ...formData, entityRegNo: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono"
+                  />
+                  <p className="text-[10.5px] text-slate-500 mt-1">
+                    Official incorporation / registration number
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Conditional Sub-panel: Individual Details */}
+            {formData.legalType === 'INDIVIDUAL' && (
+              <div className="grid grid-cols-3 gap-3 pt-2 border-t border-slate-200">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Residential Status</label>
+                  <select
+                    value={formData.residentialStatus}
+                    onChange={(e) => setFormData({ ...formData, residentialStatus: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs cursor-pointer"
+                  >
+                    {RESIDENTIAL_STATUS_OPTIONS.map((res) => (
+                      <option key={res.id} value={res.id}>{res.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Date of Birth</label>
+                  <input
+                    type="date"
+                    value={formData.dobOrDoi}
+                    onChange={(e) => setFormData({ ...formData, dobOrDoi: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Employer / Trade TAN</label>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    placeholder="e.g. BLRT01928F"
+                    value={formData.tan}
+                    onChange={(e) => setFormData({ ...formData, tan: e.target.value.toUpperCase() })}
+                    className="w-full uppercase font-mono bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Conditional Sub-panel: HUF Details */}
+            {formData.legalType === 'HUF' && (
+              <div className="grid grid-cols-3 gap-3 pt-2 border-t border-slate-200">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Karta Full Legal Name *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Harish Chandra Singhania"
+                    value={formData.kartaName}
+                    onChange={(e) => setFormData({ ...formData, kartaName: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Karta Individual PAN *</label>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    placeholder="e.g. AAAPH9921D"
+                    value={formData.kartaPan}
+                    onChange={(e) => setFormData({ ...formData, kartaPan: e.target.value.toUpperCase() })}
+                    className="w-full uppercase font-mono bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">HUF Deed Date</label>
+                  <input
+                    type="date"
+                    value={formData.hufDeedDate}
+                    onChange={(e) => setFormData({ ...formData, hufDeedDate: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Conditional Sub-panel: Firm / LLP / Company / Trust Details */}
+            {(formData.legalType === 'PARTNERSHIP_FIRM' || formData.legalType === 'LLP' || formData.legalType === 'COMPANY' || formData.legalType === 'TRUST') && (
+              <div className="grid grid-cols-3 gap-3 pt-2 border-t border-slate-200">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Responsible Person / Authorised Rep *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Rajesh Khade (Director / Partner)"
+                    value={formData.responsiblePersonName}
+                    onChange={(e) => setFormData({ ...formData, responsiblePersonName: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Responsible Person PAN</label>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    placeholder="e.g. ABCPK1234D"
+                    value={formData.responsiblePersonPan}
+                    onChange={(e) => setFormData({ ...formData, responsiblePersonPan: e.target.value.toUpperCase() })}
+                    className="w-full uppercase font-mono bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Registered Office Address</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Suite 401, Nariman Point, Mumbai"
+                    value={formData.registeredOffice}
+                    onChange={(e) => setFormData({ ...formData, registeredOffice: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Section 3: Contact & Service Assignment */}
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Email Address</label>
               <input
@@ -806,122 +1065,90 @@ export default function FirmClientsModule() {
                 placeholder="client@domain.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-teal-600"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:bg-white"
               />
             </div>
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Mobile Number (for WhatsApp Alerts)</label>
+              <label className="block font-semibold text-slate-700 mb-1">Mobile Number (WhatsApp)</label>
               <input
                 type="tel"
                 placeholder="+91 98200 12345"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-teal-600"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:bg-white"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Taxpayer Category (Sec 2(31) IT Act)</label>
+              <label className="block font-semibold text-slate-700 mb-1">Client Engagement Type</label>
               <select
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden cursor-pointer"
+                value={formData.isExistingClient ? 'EXISTING' : 'NEW'}
+                onChange={(e) => setFormData({ ...formData, isExistingClient: e.target.value === 'EXISTING' })}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs cursor-pointer font-medium"
               >
-                {ENTITY_GROUPS.map((group) => {
-                  const groupCategories = STATUTORY_TAXPAYER_CATEGORIES.filter((c) => c.groupId === group.id)
-                  return (
-                    <optgroup key={group.id} label={group.label}>
-                      {groupCategories.map((c) => (
-                        <option key={c.id} value={c.category}>
-                          {c.category} • {c.recommendedItr}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )
-                })}
-              </select>
-            </div>
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Client Advisory Tier</label>
-              <select
-                value={formData.tier}
-                onChange={(e) => setFormData({ ...formData, tier: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-hidden cursor-pointer"
-              >
-                <option value="Silver">Silver (Annual Filing + Eye-Opener)</option>
-                <option value="Gold">Gold (Quarterly Advance Tax @ ₹499/mo)</option>
-                <option value="Platinum">Platinum (SEBI RIA Wealth Advisory)</option>
+                <option value="NEW">New Taxpayer Client</option>
+                <option value="EXISTING">Existing / Retaining Client</option>
               </select>
             </div>
           </div>
 
-          {/* Statutory Entity Guidance Banner */}
-          {(() => {
-            const cat = getCategoryDetails(formData.category)
-            const panCheck = validatePanStructure(formData.pan, formData.category)
-            return (
-              <div className="space-y-2">
-                <div className="bg-blue-50/70 border border-blue-200 rounded-lg p-2.5 text-[11px] space-y-1">
-                  <div className="flex items-center justify-between font-semibold text-blue-950">
-                    <span className="flex items-center gap-1.5">
-                      <Info className="w-3.5 h-3.5 text-blue-700 shrink-0" />
-                      Statutory Authority: {cat.statutorySection}
-                    </span>
-                    <span className="px-2 py-0.5 rounded font-mono font-bold bg-blue-100 text-blue-800 text-[10px] border border-blue-200">
-                      Recommended: {cat.recommendedItr}
-                    </span>
-                  </div>
-                  <p className="text-slate-600 text-[10.5px] leading-relaxed">
-                    {cat.governingRules}
-                  </p>
-                  <div className="flex items-center gap-3 text-[10px] text-slate-500 pt-1 border-t border-blue-100 flex-wrap">
-                    <span>PAN 4th Letter: <strong className="text-slate-800 font-mono">'{cat.pan4thChar}'</strong></span>
-                    <span>•</span>
-                    <span>Required Intake: <strong className="text-slate-700">{cat.requiredDocs.slice(0, 3).join(', ')}</strong></span>
-                  </div>
-                </div>
-
-                {formData.pan.length >= 4 && panCheck.warning && (
-                  <div className="text-[10.5px] text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200 flex items-start gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                    <span>{panCheck.message}</span>
-                  </div>
-                )}
-              </div>
-            )
-          })()}
-
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">Employer / Business Name & TAN</label>
-            <input
-              type="text"
-              placeholder="e.g. Wipro Limited (TAN: BLRW01298A)"
-              value={formData.employer}
-              onChange={(e) => setFormData({ ...formData, employer: e.target.value })}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-teal-600"
-            />
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Requested Service</label>
+              <select
+                value={formData.requestedService}
+                onChange={(e) => setFormData({ ...formData, requestedService: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs cursor-pointer"
+              >
+                {REQUESTED_SERVICES.map((srv) => (
+                  <option key={srv.id} value={srv.id}>{srv.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Assigned CA Partner</label>
+              <select
+                value={formData.assignedPartner}
+                onChange={(e) => setFormData({ ...formData, assignedPartner: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs cursor-pointer"
+              >
+                <option value="CA Rajesh Sharma (Partner)">CA Rajesh Sharma (FCA #049281)</option>
+                <option value="CA Ananya Joshi (Partner)">CA Ananya Joshi (ACA #098124)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Staff In-Charge</label>
+              <select
+                value={formData.assignedStaff}
+                onChange={(e) => setFormData({ ...formData, assignedStaff: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs cursor-pointer"
+              >
+                <option value="Ananya Joshi (Senior Associate)">Ananya Joshi (Senior Associate)</option>
+                <option value="Vikram Joshi (Semi-Qualified)">Vikram Joshi (Semi-Qualified)</option>
+              </select>
+            </div>
           </div>
 
-          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-[11px] text-slate-600">
-            <span className="font-semibold text-slate-800">Consent Link Demo:</span> Upon creating this profile, an automated demonstration invitation link with a mock consent token will be prepared for the client.
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setIsAddClientOpen(false)}
-              className="px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 font-medium transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-xs transition-all active:scale-98 cursor-pointer"
-            >
-              Onboard & Generate Case
-            </button>
+          <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+            <span className="text-[11px] text-slate-500">
+              * Onboarding automatically provisions DPDP Act 2023 digital consent log and links case to AY 2025-26.
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAddClientOpen(false)}
+                className="px-3.5 py-2 rounded-lg text-slate-600 hover:bg-slate-100 font-medium transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isDuplicatePan}
+                className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-semibold shadow-xs transition-all active:scale-98 cursor-pointer flex items-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Onboard & Open Discovery</span>
+              </button>
+            </div>
           </div>
         </form>
       </Modal>
@@ -1113,15 +1340,28 @@ export default function FirmClientsModule() {
                     <span className="font-bold text-teal-900">AY 2025-26 (Active Case)</span>
                     <p className="text-[11px] text-teal-700">Form: {selectedClientForView.itrType} • Status: {selectedClientForView.status}</p>
                   </div>
-                  <button
-                    onClick={() => {
-                      setActiveClientId(selectedClientForView.id)
-                      setIsClientDetailsOpen(false)
-                    }}
-                    className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[11px] cursor-pointer active:scale-98 transition-all"
-                  >
-                    Open Workspace
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        setSelectedClientForDiscovery(selectedClientForView)
+                        setIsClientDetailsOpen(false)
+                        setIsTaxDiscoveryOpen(true)
+                      }}
+                      className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[11px] cursor-pointer active:scale-98 transition-all flex items-center gap-1 shadow-2xs"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Tax Discovery</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setActiveClientId(selectedClientForView.id)
+                        setIsClientDetailsOpen(false)
+                      }}
+                      className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[11px] cursor-pointer active:scale-98 transition-all"
+                    >
+                      Open Workspace
+                    </button>
+                  </div>
                 </div>
 
                 <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between text-slate-500">
@@ -1200,6 +1440,18 @@ export default function FirmClientsModule() {
           </div>
         </div>
       </Modal>
+
+      {/* STEP 1: CLIENT TAX DISCOVERY & INTAKE WORKSPACE */}
+      {selectedClientForDiscovery && (
+        <ClientTaxDiscoveryWorkspace
+          client={selectedClientForDiscovery}
+          isOpen={isTaxDiscoveryOpen}
+          onClose={() => {
+            setIsTaxDiscoveryOpen(false)
+            setSelectedClientForDiscovery(null)
+          }}
+        />
+      )}
     </div>
   )
 }
