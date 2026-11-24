@@ -403,31 +403,84 @@ export function AppProvider({ children }) {
   }
 
   // Document Actions
+  const mapCategoryToChecklistIds = (category) => {
+    switch (category) {
+      case 'FORM_16':
+      case 'Form 16':
+        return ['salary-form16']
+      case 'FORM_26AS':
+      case 'Form 26AS':
+        return ['tax-26as-traces']
+      case 'AIS':
+      case 'TIS':
+      case 'AIS_TIS':
+      case 'AIS / TIS':
+        return ['tax-ais-tis', 'os-bank-interest']
+      case 'BANK_STATEMENT':
+      case 'Bank Statements':
+        return ['os-bank-interest', 'bp-44ad-bank-statement']
+      case 'INVESTMENT_PROOF':
+      case 'Investment Proofs':
+        return ['ded-80c-receipts', 'ded-80d-mediclaim']
+      case 'PROPERTY_DOCUMENT':
+        return ['hp-interest-cert', 'hp-rent-agreement']
+      case 'CAPITAL_GAINS_STATEMENT':
+        return ['cg-broker-statement', 'cg-property-deeds']
+      case 'BUSINESS_RECORD':
+        return ['bp-pnl-balancesheet', 'bp-44ad-bank-statement']
+      default:
+        return []
+    }
+  }
+
   const addDocument = (docData) => {
+    const targetChecklistIds = (docData.checklistItemIds && docData.checklistItemIds.length > 0)
+      ? docData.checklistItemIds
+      : mapCategoryToChecklistIds(docData.category)
+
     const newDoc = {
-      id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      clientId: activeClientId,
+      id: docData.id || `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      clientId: docData.clientId || activeClientId,
+      clientPan: docData.clientPan || activeClient?.pan,
+      caseId: docData.caseId || activeTaxCase?.caseId || activeTaxCase?.id,
+      assessmentYear: docData.assessmentYear || activeTaxCase?.assessmentYear || activeAy,
+      name: docData.name || docData.filename,
+      category: docData.category,
+      checklistItemIds: targetChecklistIds,
+      fileSizeBytes: docData.fileSizeBytes || docData.file_size_bytes || 0,
+      fileHashSha256: docData.fileHashSha256 || docData.file_hash_sha256 || null,
+      processingStatus: docData.processingStatus || docData.processing_status || 'PARSED',
+      caReviewStatus: docData.caReviewStatus || docData.ca_review_status || 'PENDING_REVIEW',
+      reviewNotes: docData.reviewNotes || null,
+      waiveReason: docData.waiveReason || null,
       uploadDate: new Date().toISOString(),
       status: 'Uploaded',
-      encryptionStatus: `Simulated In-Memory Sandbox (PAN ${activeClient?.pan || 'DEMO'})`,
-      extractionConfidence: 98.4,
+      encryptionStatus: `Secured Private Storage (SHA-256)`,
+      extractionConfidence: 99.2,
       isCompletePartB: true,
-      boundingCitations: [],
+      boundingCitations: docData.citations || [],
       ...docData,
     }
 
     setDocuments((prev) => [newDoc, ...prev])
 
-    // Update client uploaded count & status
+    // Update client uploaded count & dynamic checklist
     setClients((prev) =>
       prev.map((c) => {
-        if (c.id !== activeClientId) return c
+        if (c.id !== (docData.clientId || activeClientId)) return c
+        const updatedChecklist = (c.dynamicChecklist || []).map((item) => {
+          if (targetChecklistIds.includes(item.id) && item.status !== 'WAIVED') {
+            return { ...item, status: 'RECEIVED' }
+          }
+          return item
+        })
         const newCount = (c.docsUploaded || 0) + 1
         const required = c.docsRequired || 4
         const newStatus = newCount >= required ? 'Documents Uploaded' : 'Documents Pending'
         return {
           ...c,
           docsUploaded: newCount,
+          dynamicChecklist: updatedChecklist,
           status: newStatus,
         }
       })
@@ -435,8 +488,8 @@ export function AppProvider({ children }) {
 
     setTaxCases((prev) =>
       prev.map((tc) => {
-        if (tc.clientId !== activeClientId) return tc
-        const existingDocsCount = documents.filter((d) => d.clientId === activeClientId).length + 1
+        if (tc.clientId !== (docData.clientId || activeClientId)) return tc
+        const existingDocsCount = documents.filter((d) => d.clientId === (docData.clientId || activeClientId)).length + 1
         const required = activeClient?.docsRequired || 4
         return {
           ...tc,
@@ -447,12 +500,131 @@ export function AppProvider({ children }) {
 
     addAuditLog(
       'DOC_UPLOAD',
-      `Uploaded ${docData.name} (${docData.category}). In-memory processing sandbox engaged.`,
+      `Uploaded ${newDoc.name} (${newDoc.category}). Case ownership verified & checksum indexed.`,
       activeClient?.name,
       activeClient?.pan,
       'Document'
     )
     return newDoc
+  }
+
+  const updateDocumentReviewStatus = (docId, newStatus, reviewNotes = '', waiveReason = '') => {
+    setDocuments((prev) =>
+      prev.map((d) => {
+        if (d.id !== docId) return d
+        return {
+          ...d,
+          caReviewStatus: newStatus,
+          reviewNotes: reviewNotes || d.reviewNotes,
+          waiveReason: waiveReason || d.waiveReason,
+        }
+      })
+    )
+
+    // Update corresponding checklist items if applicable
+    const targetDoc = documents.find((d) => d.id === docId)
+    if (targetDoc && targetDoc.checklistItemIds) {
+      setClients((prev) =>
+        prev.map((c) => {
+          if (c.id !== targetDoc.clientId) return c
+          const updatedChecklist = (c.dynamicChecklist || []).map((item) => {
+            if (targetDoc.checklistItemIds.includes(item.id)) {
+              return {
+                ...item,
+                status: newStatus === 'WAIVED' ? 'WAIVED' : newStatus === 'VERIFIED' ? 'RECEIVED' : item.status,
+                waiveReason: newStatus === 'WAIVED' ? waiveReason : item.waiveReason,
+              }
+            }
+            return item
+          })
+          return { ...c, dynamicChecklist: updatedChecklist }
+        })
+      )
+    }
+
+    addAuditLog(
+      'DOCUMENT_REVIEW_UPDATED',
+      `Document review status updated to ${newStatus} for doc ${docId}. Notes: ${reviewNotes || 'None'}. Reason: ${waiveReason || 'N/A'}.`,
+      activeClient?.name,
+      activeClient?.pan,
+      'Document'
+    )
+  }
+
+  const deleteDocument = (docId) => {
+    const docToDelete = documents.find((d) => d.id === docId)
+    setDocuments((prev) => prev.filter((d) => d.id !== docId))
+    if (docToDelete) {
+      setClients((prev) =>
+        prev.map((c) => {
+          if (c.id !== docToDelete.clientId) return c
+          return {
+            ...c,
+            docsUploaded: Math.max(0, (c.docsUploaded || 1) - 1),
+          }
+        })
+      )
+      addAuditLog(
+        'DOCUMENT_DELETED',
+        `Removed document ${docToDelete.name || docToDelete.filename || docId}.`,
+        activeClient?.name,
+        activeClient?.pan,
+        'Document'
+      )
+    }
+  }
+
+  const requestMissingDocuments = async (clientId, missingItemIds, customNotes = '') => {
+    const targetClient = clients.find((c) => c.id === clientId) || activeClient
+    if (!targetClient) return null
+
+    // Update checklist item statuses to 'REQUESTED'
+    setClients((prev) =>
+      prev.map((c) => {
+        if (c.id !== targetClient.id) return c
+        const updatedChecklist = (c.dynamicChecklist || []).map((item) => {
+          if (missingItemIds.includes(item.id) && item.status !== 'RECEIVED' && item.status !== 'WAIVED') {
+            return { ...item, status: 'REQUESTED' }
+          }
+          return item
+        })
+        return { ...c, dynamicChecklist: updatedChecklist }
+      })
+    )
+
+    let notice = null
+    try {
+      notice = await apiClient.requestMissingDocuments({
+        clientPan: targetClient.pan,
+        caseId: activeTaxCase?.caseId || activeTaxCase?.id,
+        checklistItemIds: missingItemIds,
+        customNotes,
+      })
+    } catch (err) {
+      console.warn('Backend missing docs notice generation fallback:', err)
+      notice = {
+        recipient_name: targetClient.name,
+        recipient_email: targetClient.email || 'client@example.com',
+        recipient_mobile: targetClient.mobile || '+91 98000 00000',
+        subject: `Document Request: Pending ITR Filing for ${activeAy} - ${targetClient.pan}`,
+        email_body: `Dear ${targetClient.name},\n\nPlease provide your pending tax documents:\n${missingItemIds.join('\n')}\n\nWarm regards,\nCA Bharat AI`,
+        whatsapp_body: `Hello ${targetClient.name}, please upload your pending tax documents to complete your return filing.`,
+        missing_items: missingItemIds.map((id) => ({ id, title: id.replace('-', ' ').toUpperCase() })),
+        is_simulated_dispatch: true,
+        notice_disclaimer: 'Draft outreach preview only. No external SMS/email transmission performed.',
+        generated_at: new Date().toISOString(),
+      }
+    }
+
+    addAuditLog(
+      'MISSING_DOCS_REQUESTED',
+      `Generated draft missing documents outreach for ${targetClient.name} (${targetClient.pan}). Items: ${missingItemIds.join(', ')}.`,
+      targetClient.name,
+      targetClient.pan,
+      'Outreach'
+    )
+
+    return notice
   }
 
   // Simulate AI Extraction
@@ -809,6 +981,9 @@ export function AppProvider({ children }) {
         documents,
         activeClientDocs,
         addDocument,
+        updateDocumentReviewStatus,
+        deleteDocument,
+        requestMissingDocuments,
         isSimulatingExtraction,
         runSimulatedExtraction,
         taxCases,

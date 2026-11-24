@@ -93,6 +93,88 @@ class ApiClient {
     return res.json()
   }
 
+  async getClientDocuments(pan, caseId = null) {
+    const url = new URL(`${this.baseUrl}/api/documents/${pan}`)
+    if (caseId) url.searchParams.append('case_id', caseId)
+    const res = await fetch(url.toString())
+    if (!res.ok) throw new Error(`Failed to fetch documents for ${pan}: ${res.statusText}`)
+    return res.json()
+  }
+
+  async uploadDocumentVault({
+    file,
+    clientPan,
+    clientId,
+    caseId,
+    assessmentYear,
+    category,
+    checklistItemIds = [],
+  }) {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('client_pan', clientPan)
+    if (clientId) formData.append('client_id', clientId)
+    if (caseId) formData.append('case_id', caseId)
+    if (assessmentYear) formData.append('assessment_year', assessmentYear)
+    if (category) formData.append('category', category)
+    if (checklistItemIds && checklistItemIds.length > 0) {
+      formData.append('checklist_item_ids', JSON.stringify(checklistItemIds))
+    }
+
+    const res = await fetch(`${this.baseUrl}/api/documents/upload`, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}))
+      throw new Error(errJson.detail || `Upload failed: ${res.statusText}`)
+    }
+    return res.json()
+  }
+
+  async updateDocumentStatus(docId, caReviewStatus, reviewNotes = null, waiveReason = null) {
+    const res = await fetch(`${this.baseUrl}/api/documents/${docId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ca_review_status: caReviewStatus,
+        review_notes: reviewNotes,
+        waive_reason: waiveReason,
+      }),
+    })
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}))
+      throw new Error(errJson.detail || `Failed to update status: ${res.statusText}`)
+    }
+    return res.json()
+  }
+
+  async requestMissingDocuments({ clientPan, caseId = null, checklistItemIds = [], customNotes = '' }) {
+    const res = await fetch(`${this.baseUrl}/api/documents/request-missing`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_pan: clientPan,
+        case_id: caseId,
+        checklist_item_ids: checklistItemIds,
+        custom_notes: customNotes,
+      }),
+    })
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}))
+      throw new Error(errJson.detail || `Failed to generate missing documents notice: ${res.statusText}`)
+    }
+    return res.json()
+  }
+
+  async deleteDocument(docId) {
+    const res = await fetch(`${this.baseUrl}/api/documents/${docId}`, {
+      method: 'DELETE',
+    })
+    if (!res.ok) throw new Error(`Failed to delete document: ${res.statusText}`)
+    return res.json()
+  }
+
   async run3WayReconciliation(clientPan, assessmentYear = '2025-26') {
     const res = await fetch(`${this.baseUrl}/api/reconcile/run`, {
       method: 'POST',

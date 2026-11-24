@@ -5,6 +5,39 @@ Supports Form 16 (Part A & B), Form 26AS (TRACES), AIS/TIS with Source Citations
 
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
+from enum import Enum
+
+class DocumentCategoryEnum(str, Enum):
+    FORM_16 = "FORM_16"
+    FORM_26AS = "FORM_26AS"
+    AIS = "AIS"
+    TIS = "TIS"
+    BANK_STATEMENT = "BANK_STATEMENT"
+    INVESTMENT_PROOF = "INVESTMENT_PROOF"
+    BUSINESS_RECORD = "BUSINESS_RECORD"
+    PROPERTY_DOCUMENT = "PROPERTY_DOCUMENT"
+    CAPITAL_GAINS_STATEMENT = "CAPITAL_GAINS_STATEMENT"
+    OTHER_PROOF = "OTHER_PROOF"
+
+class ChecklistStatusEnum(str, Enum):
+    REQUIRED = "REQUIRED"
+    REQUESTED = "REQUESTED"
+    RECEIVED = "RECEIVED"
+    UNDER_REVIEW = "UNDER_REVIEW"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    WAIVED = "WAIVED"
+
+class DocumentProcessingStatusEnum(str, Enum):
+    UPLOADED = "UPLOADED"
+    PARSING = "PARSING"
+    PARSED = "PARSED"
+    PARSING_FAILED = "PARSING_FAILED"
+
+class CAReviewStatusEnum(str, Enum):
+    PENDING_REVIEW = "PENDING_REVIEW"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
+    WAIVED = "WAIVED"
 
 class SourceCitation(BaseModel):
     field_name: str
@@ -137,3 +170,47 @@ class ExtractionResult(BaseModel):
     citations: List[SourceCitation] = Field(default_factory=list)
     ocr_confidence: float = 0.99
     processed_at: str
+
+class DocumentRecord(BaseModel):
+    id: str
+    client_id: Optional[str] = None
+    client_pan: str
+    case_id: Optional[str] = None
+    assessment_year: str
+    filename: str
+    category: str  # DocumentCategoryEnum or legacy
+    page_count: int = 1
+    processing_status: str = DocumentProcessingStatusEnum.PARSED.value
+    ca_review_status: str = CAReviewStatusEnum.PENDING_REVIEW.value
+    checklist_item_ids: List[str] = Field(default_factory=list)
+    file_size_bytes: int = 0
+    file_hash_sha256: Optional[str] = None
+    file_type: str = "application/pdf"
+    storage_path: Optional[str] = None
+    review_notes: Optional[str] = None
+    waive_reason: Optional[str] = None
+    citations_count: int = 0
+    uploaded_at: str
+
+class DocumentStatusUpdateRequest(BaseModel):
+    ca_review_status: str
+    review_notes: Optional[str] = None
+    waive_reason: Optional[str] = None
+
+class MissingDocRequestPayload(BaseModel):
+    client_pan: str
+    case_id: Optional[str] = None
+    checklist_item_ids: List[str]
+    custom_notes: Optional[str] = None
+
+class MissingDocDraftNotice(BaseModel):
+    recipient_name: str
+    recipient_email: Optional[str] = None
+    recipient_mobile: Optional[str] = None
+    subject: str
+    email_body: str
+    whatsapp_body: str
+    missing_items: List[Dict[str, str]]
+    is_simulated_dispatch: bool = True
+    notice_disclaimer: str = "Draft outreach preview only. No external SMS/email transmission performed."
+    generated_at: str

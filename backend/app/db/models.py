@@ -68,11 +68,23 @@ class DBUploadedDocument(Base):
     __tablename__ = "uploaded_documents"
 
     id = Column(String(64), primary_key=True, index=True)
+    client_id = Column(String(64), nullable=True, index=True)
     client_pan = Column(String(10), ForeignKey("taxpayer_profiles.pan"), index=True, nullable=False)
+    case_id = Column(String(64), nullable=True, index=True)
+    assessment_year = Column(String(16), default="AY 2025-26")
     filename = Column(String(256), nullable=False)
-    category = Column(String(64), nullable=False)  # FORM_16, FORM_26AS, AIS_TIS, BANK_STATEMENT
+    category = Column(String(64), nullable=False)  # DocumentCategoryEnum or legacy
+    checklist_item_ids_json = Column(Text, nullable=True)  # JSON list of satisfied checklist item IDs
     page_count = Column(Integer, default=1)
-    status = Column(String(32), default="PARSED")  # UPLOADED, PARSED, RECONCILED
+    status = Column(String(32), default="PARSED")  # legacy backward compat
+    processing_status = Column(String(32), default="PARSED")  # UPLOADED, PARSING, PARSED, PARSING_FAILED
+    ca_review_status = Column(String(32), default="PENDING_REVIEW")  # PENDING_REVIEW, VERIFIED, REJECTED, WAIVED
+    file_hash_sha256 = Column(String(64), nullable=True)
+    file_size_bytes = Column(Integer, default=0)
+    file_type = Column(String(64), default="application/pdf")
+    storage_path = Column(String(512), nullable=True)
+    review_notes = Column(Text, nullable=True)
+    waive_reason = Column(Text, nullable=True)
     extracted_data_json = Column(Text, nullable=True)  # JSON serialization of parsed fields
     citations_json = Column(Text, nullable=True)       # JSON bounding box coordinates [x0, y0, x1, y1]
     uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

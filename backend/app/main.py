@@ -13,6 +13,7 @@ from .db.session import init_db
 from .api import (
     routes_clients,
     routes_extract,
+    routes_documents,
     routes_reconcile,
     routes_calculate,
     routes_export,
@@ -54,6 +55,7 @@ app.add_middleware(
 # Register Subsystem Routers
 app.include_router(routes_clients.router)
 app.include_router(routes_extract.router)
+app.include_router(routes_documents.router)
 app.include_router(routes_reconcile.router)
 app.include_router(routes_calculate.router)
 app.include_router(routes_export.router)

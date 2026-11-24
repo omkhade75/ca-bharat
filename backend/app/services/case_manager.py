@@ -254,6 +254,29 @@ class CaseManager:
             pass
         return None
 
+    def verify_client_case_ownership(self, pan: str, client_id: Optional[str] = None, case_id: Optional[str] = None) -> bool:
+        """Verifies that client exists and matches PAN / client_id before allowing document ops."""
+        pan_upper = pan.upper()
+        client = self.get_client(pan_upper)
+        if not client:
+            return False
+        if client_id and client.id and client.id != client_id:
+            return False
+        return True
+
+    def get_client_assessment_year(self, pan: str, case_id: Optional[str] = None) -> str:
+        """Reads assessment year dynamically from client tax case rather than hardcoding."""
+        pan_upper = pan.upper()
+        client = self.get_client(pan_upper)
+        if client and getattr(client, "consent", None) and getattr(client.consent, "assessment_year", None):
+            ay = client.consent.assessment_year
+            return ay if ay.startswith("AY ") else f"AY {ay}"
+        if client and getattr(client, "intake_discovery", None):
+            ay = client.intake_discovery.get("assessment_year") or client.intake_discovery.get("tax_year")
+            if ay:
+                return ay if ay.startswith("AY ") else f"AY {ay}"
+        return "AY 2025-26"
+
     def list_clients(self) -> List[ClientProfile]:
         # Merge database clients with memory cache
         try:

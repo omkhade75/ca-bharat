@@ -40,5 +40,7 @@ venv/
 *.db
 *.sqlite
 *.sqlite3
+backend/app/storage/uploads/*
+!backend/app/storage/uploads/.gitkeep
 
 

@@ -42,11 +42,19 @@ def seed_initial_data(db: Session):
     # Arun's Documents
     doc1 = DBUploadedDocument(
         id="doc-arun-f16",
+        client_id="client-arun-01",
         client_pan="ABCPA1092F",
+        case_id="case-arun-ay2526",
+        assessment_year="AY 2025-26",
         filename="Form16_Arun_TCS_AY2025-26.pdf",
         category="FORM_16",
+        checklist_item_ids_json=json.dumps(["salary-form16", "ded-80c-receipts"]),
         page_count=4,
         status="PARSED",
+        processing_status="PARSED",
+        ca_review_status="VERIFIED",
+        file_size_bytes=342100,
+        file_type="application/pdf",
         extracted_data_json=json.dumps({
             "gross_salary": 1450000.0,
             "exemptions_us_10": 48000.0,
@@ -65,11 +73,19 @@ def seed_initial_data(db: Session):
     )
     doc2 = DBUploadedDocument(
         id="doc-arun-26as",
+        client_id="client-arun-01",
         client_pan="ABCPA1092F",
+        case_id="case-arun-ay2526",
+        assessment_year="AY 2025-26",
         filename="Form26AS_TRACES_ABCPA1092F.pdf",
         category="FORM_26AS",
+        checklist_item_ids_json=json.dumps(["tax-26as-traces"]),
         page_count=2,
         status="PARSED",
+        processing_status="PARSED",
+        ca_review_status="VERIFIED",
+        file_size_bytes=184500,
+        file_type="application/pdf",
         extracted_data_json=json.dumps({
             "total_tds_salary": 128450.0,
             "total_tds_non_salary": 0.0,
@@ -82,11 +98,19 @@ def seed_initial_data(db: Session):
     )
     doc3 = DBUploadedDocument(
         id="doc-arun-ais",
+        client_id="client-arun-01",
         client_pan="ABCPA1092F",
+        case_id="case-arun-ay2526",
+        assessment_year="AY 2025-26",
         filename="AIS_TIS_ABCPA1092F_AY2025-26.pdf",
-        category="AIS_TIS",
+        category="AIS",
+        checklist_item_ids_json=json.dumps(["tax-ais-tis", "os-bank-interest"]),
         page_count=3,
         status="PARSED",
+        processing_status="PARSED",
+        ca_review_status="VERIFIED",
+        file_size_bytes=219400,
+        file_type="application/pdf",
         extracted_data_json=json.dumps({
             "savings_interest": 18450.0,
             "dividend_income": 4200.0,

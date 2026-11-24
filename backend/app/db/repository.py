@@ -55,34 +55,87 @@ class TaxpayerRepository:
         return False
 
     # --- Document Operations ---
-    def get_documents_by_pan(self, pan: str) -> List[DBUploadedDocument]:
-        return self.db.query(DBUploadedDocument).filter(DBUploadedDocument.client_pan == pan.upper()).all()
+    def get_documents_by_pan(self, pan: str, case_id: Optional[str] = None) -> List[DBUploadedDocument]:
+        query = self.db.query(DBUploadedDocument).filter(DBUploadedDocument.client_pan == pan.upper())
+        if case_id:
+            query = query.filter((DBUploadedDocument.case_id == case_id) | (DBUploadedDocument.case_id.is_(None)))
+        return query.order_by(DBUploadedDocument.uploaded_at.desc()).all()
+
+    def get_document_by_id(self, doc_id: str) -> Optional[DBUploadedDocument]:
+        return self.db.query(DBUploadedDocument).filter(DBUploadedDocument.id == doc_id).first()
 
     def save_document(
         self,
         pan: str,
         filename: str,
         category: str,
-        page_count: int,
-        extracted_data: Dict[str, Any],
-        citations: Dict[str, Any],
+        page_count: int = 1,
+        extracted_data: Optional[Dict[str, Any]] = None,
+        citations: Optional[Dict[str, Any]] = None,
+        client_id: Optional[str] = None,
+        case_id: Optional[str] = None,
+        assessment_year: str = "AY 2025-26",
+        checklist_item_ids: Optional[List[str]] = None,
+        file_size_bytes: int = 0,
+        file_hash_sha256: Optional[str] = None,
+        file_type: str = "application/pdf",
+        storage_path: Optional[str] = None,
+        processing_status: str = "PARSED",
+        ca_review_status: str = "PENDING_REVIEW",
     ) -> DBUploadedDocument:
-        doc_id = f"doc-{pan}-{category.lower()}-{int(datetime.now(timezone.utc).timestamp())}"
+        doc_id = f"doc-{pan.upper()}-{category.lower()}-{int(datetime.now(timezone.utc).timestamp()*1000)}"
         doc = DBUploadedDocument(
             id=doc_id,
+            client_id=client_id,
             client_pan=pan.upper(),
+            case_id=case_id,
+            assessment_year=assessment_year,
             filename=filename,
             category=category,
+            checklist_item_ids_json=json.dumps(checklist_item_ids or []),
             page_count=page_count,
-            status="PARSED",
-            extracted_data_json=json.dumps(extracted_data),
-            citations_json=json.dumps(citations),
+            status=processing_status,
+            processing_status=processing_status,
+            ca_review_status=ca_review_status,
+            file_hash_sha256=file_hash_sha256,
+            file_size_bytes=file_size_bytes,
+            file_type=file_type,
+            storage_path=storage_path,
+            extracted_data_json=json.dumps(extracted_data or {}),
+            citations_json=json.dumps(citations or {}),
             uploaded_at=datetime.now(timezone.utc),
         )
         self.db.add(doc)
         self.db.commit()
         self.db.refresh(doc)
         return doc
+
+    def update_document_status(
+        self,
+        doc_id: str,
+        ca_review_status: str,
+        review_notes: Optional[str] = None,
+        waive_reason: Optional[str] = None,
+    ) -> Optional[DBUploadedDocument]:
+        doc = self.get_document_by_id(doc_id)
+        if doc:
+            doc.ca_review_status = ca_review_status
+            if review_notes is not None:
+                doc.review_notes = review_notes
+            if waive_reason is not None:
+                doc.waive_reason = waive_reason
+            self.db.commit()
+            self.db.refresh(doc)
+            return doc
+        return None
+
+    def delete_document(self, doc_id: str) -> bool:
+        doc = self.get_document_by_id(doc_id)
+        if doc:
+            self.db.delete(doc)
+            self.db.commit()
+            return True
+        return False
 
     # --- Reconciliation Operations ---
     def get_reconciliation_items_by_pan(self, pan: str) -> List[DBReconciliationItem]:
