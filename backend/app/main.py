@@ -7,7 +7,9 @@ Zero-LLM Deterministic Architecture
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from .config import settings
+from .db.session import init_db
 from .api import (
     routes_clients,
     routes_extract,
@@ -17,12 +19,21 @@ from .api import (
     routes_audit,
 )
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        init_db()
+    except Exception as e:
+        print(f"Warning during DB initialization: {e}")
+    yield
+
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="Deterministic Direct Tax Intelligence, 3-Way Reconciliation, and ICAI-Standard Excel Workpaper Engine.",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # Enable CORS for frontend connectivity

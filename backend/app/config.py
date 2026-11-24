@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEFAULT_AY: str = "2025-26"
     DEFAULT_FY: str = "2024-25"
+    DATABASE_URL: str = "sqlite:///./ca_bharat.db"
     
     # Standard Deduction u/s 16(ia)
     STANDARD_DEDUCTION_NEW_REGIME_AY_2025_26: float = 75000.0  # Increased by Finance Act 2024

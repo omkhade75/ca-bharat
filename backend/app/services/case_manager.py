@@ -205,17 +205,112 @@ class CaseManager:
         self.reconciliations[radhika.pan] = recon_radhika
 
     def get_client(self, pan: str) -> Optional[ClientProfile]:
-        return self.clients.get(pan.upper())
+        pan_upper = pan.upper()
+        if pan_upper in self.clients:
+            return self.clients[pan_upper]
+        # Query from database if present
+        try:
+            from ..db.session import SessionLocal
+            from ..db.repository import TaxpayerRepository
+            db = SessionLocal()
+            try:
+                repo = TaxpayerRepository(db)
+                db_client = repo.get_client_by_pan(pan_upper)
+                if db_client:
+                    cat_val = TaxpayerCategoryEnum.INDIVIDUAL_SALARIED
+                    for c in TaxpayerCategoryEnum:
+                        if c.value == db_client.category or c.name == db_client.category:
+                            cat_val = c
+                            break
+                    profile = ClientProfile(
+                        id=db_client.id,
+                        pan=db_client.pan,
+                        name=db_client.name,
+                        category=cat_val,
+                        recommended_itr=db_client.recommended_itr or "ITR-1",
+                        email=db_client.email,
+                        mobile=db_client.mobile,
+                        employer_or_trade_name=db_client.employer_or_trade_name,
+                        tan=db_client.tan,
+                        advisory_tier=db_client.tier or "Silver",
+                        workflow_status=db_client.status or "Onboarding",
+                    )
+                    self.clients[pan_upper] = profile
+                    return profile
+            finally:
+                db.close()
+        except Exception:
+            pass
+        return None
 
     def list_clients(self) -> List[ClientProfile]:
+        # Merge database clients with memory cache
+        try:
+            from ..db.session import SessionLocal
+            from ..db.repository import TaxpayerRepository
+            db = SessionLocal()
+            try:
+                repo = TaxpayerRepository(db)
+                db_clients = repo.get_all_clients()
+                for c in db_clients:
+                    if c.pan not in self.clients:
+                        cat_val = TaxpayerCategoryEnum.INDIVIDUAL_SALARIED
+                        for e in TaxpayerCategoryEnum:
+                            if e.value == c.category:
+                                cat_val = e
+                                break
+                        self.clients[c.pan] = ClientProfile(
+                            id=c.id,
+                            pan=c.pan,
+                            name=c.name,
+                            category=cat_val,
+                            recommended_itr=c.recommended_itr or "ITR-1",
+                            email=c.email,
+                            mobile=c.mobile,
+                            employer_or_trade_name=c.employer_or_trade_name,
+                            tan=c.tan,
+                            advisory_tier=c.tier or "Silver",
+                            workflow_status=c.status or "Onboarding",
+                        )
+            finally:
+                db.close()
+        except Exception:
+            pass
         return list(self.clients.values())
 
     def add_client(self, client: ClientProfile) -> ClientProfile:
         self.clients[client.pan] = client
+        # Persist to database
+        try:
+            from ..db.session import SessionLocal
+            from ..db.repository import TaxpayerRepository
+            db = SessionLocal()
+            try:
+                repo = TaxpayerRepository(db)
+                repo.create_or_update_client({
+                    "id": client.id,
+                    "pan": client.pan.upper(),
+                    "name": client.name,
+                    "category": client.category.value if hasattr(client.category, "value") else str(client.category),
+                    "tier": getattr(client, "advisory_tier", "Silver"),
+                    "recommended_itr": client.recommended_itr,
+                    "email": client.email,
+                    "mobile": client.mobile,
+                    "employer_or_trade_name": client.employer_or_trade_name,
+                    "tan": client.tan,
+                    "bank_account_no": client.bank_details.account_number if client.bank_details else None,
+                    "bank_ifsc": client.bank_details.ifsc_code if client.bank_details else None,
+                    "bank_name": client.bank_details.bank_name if client.bank_details else None,
+                    "status": getattr(client, "workflow_status", "Onboarding"),
+                })
+            finally:
+                db.close()
+        except Exception:
+            pass
         return client
 
     def log_event(self, actor: str, action: str, details: str, pan: str, ip: str = "127.0.0.1"):
-        self.audit_logs.append({
+        log_entry = {
             "id": f"evt-{len(self.audit_logs)+1:03d}",
             "timestamp": datetime.now().isoformat(),
             "actor": actor,
@@ -223,6 +318,25 @@ class CaseManager:
             "details": details,
             "pan": pan,
             "ip_address": ip,
-        })
+        }
+        self.audit_logs.append(log_entry)
+        # Persist to database
+        try:
+            from ..db.session import SessionLocal
+            from ..db.repository import TaxpayerRepository
+            db = SessionLocal()
+            try:
+                repo = TaxpayerRepository(db)
+                repo.add_audit_log(
+                    actor=actor,
+                    action=action,
+                    details=details,
+                    pan=pan,
+                    ip_address=ip,
+                )
+            finally:
+                db.close()
+        except Exception:
+            pass
 
 case_manager = CaseManager()

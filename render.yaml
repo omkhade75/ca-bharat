@@ -1,5 +1,21 @@
 services:
   - type: web
+    name: ca-bharat-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: APP_NAME
+        value: CA Bharat AI Enterprise Backend
+
+  - type: web
     name: ca-bharat-ai
     runtime: static
     buildCommand: npm install && npm run build
