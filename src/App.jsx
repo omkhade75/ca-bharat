@@ -34,6 +34,10 @@ export default function App() {
 
           {/* Fallback Aliases */}
           <Route path="/app" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/workspace/clients" element={<Navigate to="/firm-clients" replace />} />
+          <Route path="/clients" element={<Navigate to="/firm-clients" replace />} />
+          <Route path="/documents" element={<Navigate to="/document-intelligence" replace />} />
+          <Route path="/reconciliation" element={<Navigate to="/tax-reconciliation" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

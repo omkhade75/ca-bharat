@@ -205,7 +205,7 @@ export default function TaxReconciliationModule() {
           The firm taxpayer directory is currently empty or no taxpayer is selected. Onboard a client in Firm & Client Operations or seed statutory profiles to run 3-way reconciliation and tax calculations.
         </p>
         <button
-          onClick={() => navigate('/workspace/clients')}
+          onClick={() => navigate('/firm-clients')}
           className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
         >
           Open Taxpayer Directory

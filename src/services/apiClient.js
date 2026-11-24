@@ -47,6 +47,22 @@ class ApiClient {
     return res.json()
   }
 
+  async getClientIntake(pan) {
+    const res = await fetch(`${this.baseUrl}/api/clients/${pan}/intake`)
+    if (!res.ok) throw new Error(`Taxpayer intake for ${pan} not found`)
+    return res.json()
+  }
+
+  async putClientIntake(pan, intakeData) {
+    const res = await fetch(`${this.baseUrl}/api/clients/${pan}/intake`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(intakeData),
+    })
+    if (!res.ok) throw new Error(`Failed to update intake for ${pan}: ${res.statusText}`)
+    return res.json()
+  }
+
   async onboardTaxpayer(taxpayerData) {
     const res = await fetch(`${this.baseUrl}/api/clients`, {
       method: 'POST',

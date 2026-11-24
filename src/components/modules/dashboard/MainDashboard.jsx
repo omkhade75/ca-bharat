@@ -360,7 +360,7 @@ export default function MainDashboard() {
                         Onboard a client or seed statutory profiles in Firm & Client Operations.
                       </p>
                       <button
-                        onClick={() => navigate('/workspace/clients')}
+                        onClick={() => navigate('/firm-clients')}
                         className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-500 transition-colors shadow-xs cursor-pointer"
                       >
                         <UserPlus className="w-3.5 h-3.5" />
