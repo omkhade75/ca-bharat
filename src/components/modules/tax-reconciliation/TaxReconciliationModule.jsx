@@ -22,6 +22,7 @@ import { formatINR, formatDate } from '../../../utils/formatters'
 import { compareTaxRegimes } from '../../../utils/taxCalculator'
 import Badge from '../../common/Badge'
 import Modal from '../../common/Modal'
+import apiClient from '../../../services/apiClient'
 
 export default function TaxReconciliationModule() {
   const navigate = useNavigate()
@@ -167,14 +168,15 @@ export default function TaxReconciliationModule() {
   const downloadExcelWorkpaper = async () => {
     recordReportGenerated(activeTaxCase?.id || activeTaxCase?.caseId)
     try {
-      const apiUrl = `http://localhost:8000/api/export/workpaper/${activeClient?.pan || 'ABCPA1092F'}`
+      const pan = activeClient?.pan || 'ABCPA1092F'
+      const apiUrl = apiClient.getExcelWorkpaperUrl(pan)
       const response = await fetch(apiUrl)
       if (response.ok) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `CA_Audit_Workpaper_${activeClient?.pan || 'ABCPA1092F'}_AY2025-26.xlsx`
+        a.download = `CA_Audit_Workpaper_${pan}_AY2025-26.xlsx`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)

@@ -15,6 +15,7 @@ import {
 import { useApp } from '../../context/AppContext'
 import { formatINR } from '../../utils/formatters'
 import { LogoMark } from '../common/Logo'
+import apiClient from '../../services/apiClient'
 
 export default function Topbar({ onToggleMobileMenu = () => {} }) {
   const {
@@ -31,11 +32,33 @@ export default function Topbar({ onToggleMobileMenu = () => {} }) {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [resetFeedback, setResetFeedback] = useState(false)
+  const [backendStatus, setBackendStatus] = useState({ online: false, checking: true, latency: null })
 
   const notifRef = useRef(null)
   const userMenuRef = useRef(null)
 
   const unreadCount = notifications.filter((n) => !n.read).length
+
+  // Check live backend connectivity on mount
+  useEffect(() => {
+    let mounted = true
+    async function verifyBackend() {
+      const res = await apiClient.checkHealth()
+      if (mounted) {
+        setBackendStatus({
+          online: res.online,
+          checking: false,
+          latency: res.latency || null,
+        })
+      }
+    }
+    verifyBackend()
+    const timer = setInterval(verifyBackend, 30000)
+    return () => {
+      mounted = false
+      clearInterval(timer)
+    }
+  }, [])
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -132,6 +155,40 @@ export default function Topbar({ onToggleMobileMenu = () => {} }) {
           <span className="font-bold text-emerald-900 font-mono">
             {formatINR(clients.reduce((acc, c) => acc + (c.refundExpected || 0), 0), { compact: true })}
           </span>
+        </div>
+
+        {/* Live Backend Connection Indicator */}
+        <div
+          title={
+            backendStatus.online
+              ? `FastAPI Backend connected (${backendStatus.latency}ms)`
+              : 'Connecting to Render FastAPI Python Backend...'
+          }
+          className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10.5px] font-semibold border transition-colors ${
+            backendStatus.online
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              : backendStatus.checking
+              ? 'bg-slate-50 text-slate-700 border-slate-200'
+              : 'bg-amber-50 text-amber-800 border-amber-200'
+          }`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              backendStatus.online ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+            }`}
+          ></span>
+          <span>
+            {backendStatus.online
+              ? 'Backend Live'
+              : backendStatus.checking
+              ? 'Connecting API...'
+              : 'API Offline'}
+          </span>
+          {backendStatus.online && backendStatus.latency && (
+            <span className="text-[9px] text-emerald-600 font-mono">
+              {backendStatus.latency}ms
+            </span>
+          )}
         </div>
 
         {/* Public Landing Page Link */}
