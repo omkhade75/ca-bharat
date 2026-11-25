@@ -75,6 +75,8 @@ class TaxComputationResult(BaseModel):
     tax_due_amount: float
 
 class RegimeComparisonResult(BaseModel):
+    client_id: Optional[str] = None
+    case_id: Optional[str] = None
     client_pan: str
     client_name: str
     assessment_year: str = "2025-26"
@@ -86,3 +88,9 @@ class RegimeComparisonResult(BaseModel):
     ca_approver: Optional[str] = None
     ca_approval_timestamp: Optional[str] = None
     verification_hash: Optional[str] = None
+    ca_notes: Optional[str] = None
+    data_source: str = "VALIDATED_BACKEND_DOCUMENTS"
+    validation_status: str = "READY"  # READY / UNVERIFIED_DOCS / UNRESOLVED_DISCREPANCIES
+    validation_gate: Dict[str, Any] = Field(default_factory=dict)
+    income_summary: Dict[str, Any] = Field(default_factory=dict)
+    deductions_summary: Dict[str, Any] = Field(default_factory=dict)

@@ -366,15 +366,15 @@ export default function StepInteractiveSimulation({ step, clientPersona = 'rahul
       return (
         <div className="grid grid-cols-2 gap-3 text-xs">
           {[
-            { name: 'ArunV_Form16_PartAB.pdf', type: 'Form 16', size: '1.4 MB', status: 'Encrypted in RAM', conf: '99.4%' },
-            { name: 'TRACES_Form26AS_AY2526.pdf', type: 'Form 26AS', size: '820 KB', status: 'Encrypted in RAM', conf: '99.6%' },
-            { name: 'AIS_TIS_Summary_AY2526.pdf', type: 'AIS / TIS', size: '2.1 MB', status: 'Encrypted in RAM', conf: '98.9%' },
-            { name: 'HDFC_Bank_Statement.pdf', type: 'Bank Statement', size: '340 KB', status: 'Structured Ingest', conf: '100%' },
+            { name: 'ArunV_Form16_PartAB.pdf', type: 'Form 16', size: '1.4 MB', status: 'Private Storage', badge: 'PDF Parser' },
+            { name: 'TRACES_Form26AS_AY2526.pdf', type: 'Form 26AS', size: '820 KB', status: 'Private Storage', badge: 'PDF Parser' },
+            { name: 'AIS_TIS_Summary_AY2526.pdf', type: 'AIS / TIS', size: '2.1 MB', status: 'Private Storage', badge: 'PDF Parser' },
+            { name: 'HDFC_Bank_Statement.pdf', type: 'Bank Statement', size: '340 KB', status: 'Vault Only', badge: 'Manual Review' },
           ].map((file, i) => (
             <div key={i} className="bg-white border border-slate-200 p-3 rounded-lg space-y-1">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-slate-900 truncate pr-2">{file.name}</span>
-                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-mono">{file.conf}</span>
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-mono">{file.badge}</span>
               </div>
               <div className="flex items-center justify-between text-[11px] text-slate-500">
                 <span>{file.type} • {file.size}</span>
@@ -392,7 +392,7 @@ export default function StepInteractiveSimulation({ step, clientPersona = 'rahul
         <div className="bg-slate-900 text-slate-100 p-4 rounded-xl border border-slate-800 space-y-3 text-xs">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
             <span className="font-semibold text-sm text-slate-100 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-blue-400" /> AI OCR Coordinate Evidence Citations
+              <Sparkles className="w-4 h-4 text-blue-400" /> Deterministic Coordinate Evidence Citations
             </span>
             <span className="text-[11px] font-mono text-blue-300 bg-blue-500/20 px-2 py-0.5 rounded border border-blue-500/30">
               Pixel Bounding Boxes
@@ -400,10 +400,10 @@ export default function StepInteractiveSimulation({ step, clientPersona = 'rahul
           </div>
           <div className="space-y-2">
             {[
-              { field: 'Gross Salary u/s 17(1)', value: '₹24,50,000', source: 'Form 16 Part B', page: 'Page 2', bbox: '[x:142, y:380, w:180, h:24]', conf: '99.4%' },
-              { field: 'Tax Deducted u/s 192 (Salary TDS)', value: '₹3,42,000', source: 'Form 16 Part A', page: 'Page 1', bbox: '[x:410, y:512, w:120, h:20]', conf: '99.8%' },
-              { field: 'Savings Bank Interest SFT-005', value: '₹46,000', source: 'AIS Statement', page: 'Page 4', bbox: '[x:85, y:690, w:210, h:22]', conf: '98.7%' },
-              { field: 'Dividend Credits u/s 194', value: '₹4,200', source: 'TRACES 26AS Part B', page: 'Page 1', bbox: '[x:320, y:210, w:110, h:18]', conf: '99.5%' },
+              { field: 'Gross Salary u/s 17(1)', value: '₹24,50,000', source: 'Form 16 Part B', page: 'Page 2', bbox: '[142.0, 380.0, 322.0, 404.0]', status: 'COORDINATE_VERIFIED' },
+              { field: 'Tax Deducted u/s 192 (Salary TDS)', value: '₹3,42,000', source: 'Form 16 Part A', page: 'Page 1', bbox: '[410.0, 512.0, 530.0, 532.0]', status: 'COORDINATE_VERIFIED' },
+              { field: 'Savings Bank Interest SFT-005', value: '₹46,000', source: 'AIS Statement', page: 'Page 4', bbox: '[85.0, 690.0, 295.0, 712.0]', status: 'COORDINATE_VERIFIED' },
+              { field: 'Dividend Credits u/s 194', value: '₹4,200', source: 'TRACES 26AS Part B', page: 'Page 1', bbox: '[320.0, 210.0, 430.0, 228.0]', status: 'COORDINATE_VERIFIED' },
             ].map((item, i) => (
               <div key={i} className="flex items-center justify-between bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/60">
                 <div>
@@ -414,7 +414,7 @@ export default function StepInteractiveSimulation({ step, clientPersona = 'rahul
                   </div>
                 </div>
                 <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded">
-                  {item.conf}
+                  {item.status}
                 </span>
               </div>
             ))}

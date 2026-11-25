@@ -246,7 +246,7 @@ export const WORKFLOW_STAGES = [
         actor: 'AI OCR Engine',
         controls: ['AI reliability', 'Traceability', 'Manual fallback'],
         inputs: ['Form 16 Part A/B', 'TRACES 26AS', 'Income Tax AIS / TIS', 'Housing loan interest certs'],
-        outputs: ['Structured JSON tax schedules', 'Bounding-box coordinate citations', 'Model confidence scores (e.g. 99.4%)'],
+        outputs: ['Structured JSON tax schedules', 'Bounding-box coordinate citations', 'Coordinate localization evidence scores'],
         keyTakeaway: 'Every extracted number carries exact pixel-coordinate bounding citations back to the source page.',
         interactiveDemoType: 'ocr_extract',
       },

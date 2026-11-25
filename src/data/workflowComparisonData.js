@@ -69,7 +69,7 @@ export const KEY_DIFFERENTIATORS = [
     differentiator: 'AI Document Extraction & Source Traceability',
     valueCreated: 'Eliminates repetitive manual data entry and maintains click-to-source coordinate bounding citations back to the exact page and line of the original PDF.',
     traditionalApproach: 'Manual data entry, Excel import sheets, or standard JSON downloads from the tax portal.',
-    caBharatAdvantage: 'Dedicated OCR & Layout Parser stages documents in ephemeral RAM, identifies line items with >99% confidence, and keeps an interactive link to source documents.',
+    caBharatAdvantage: 'Deterministic Layout Parser processes supported PDFs, generates coordinate localization evidence scores, and keeps an interactive link to source pages.',
     badge: 'Engine 1 Core',
     color: 'teal',
   },

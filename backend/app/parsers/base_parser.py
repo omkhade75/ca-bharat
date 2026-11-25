@@ -53,16 +53,21 @@ class BaseDocParser:
             # Search for rect of matched text
             rects = page.search_for(matched_text)
             bbox = [0.0, 0.0, 0.0, 0.0]
+            score = 0.6
+            status = "TEXT_MATCH_ONLY"
             if rects:
                 r = rects[0]
                 bbox = [round(r.x0, 2), round(r.y0, 2), round(r.x1, 2), round(r.y1, 2)]
+                score = 1.0
+                status = "COORDINATE_VERIFIED"
 
             citation = SourceCitation(
                 field_name=pattern,
                 page_number=page_num + 1,
                 bounding_box=bbox,
                 raw_text=matched_text,
-                confidence=0.99,
+                evidence_score=score,
+                evidence_status=status,
                 document_name=doc_name
             )
             return matched_text, citation

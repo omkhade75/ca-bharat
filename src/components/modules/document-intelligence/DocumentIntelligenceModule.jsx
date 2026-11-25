@@ -33,6 +33,10 @@ import { formatDate } from '../../../utils/formatters'
 import Modal from '../../common/Modal'
 import ClientTaxDiscoveryWorkspace from '../firm-clients/ClientTaxDiscoveryWorkspace'
 import apiClient from '../../../services/apiClient'
+import ExtractedDataReviewPanel from './ExtractedDataReviewPanel'
+import FieldCorrectionModal from './FieldCorrectionModal'
+import BackendAuthModal from '../../common/BackendAuthModal'
+import { resolveBackendCaseId } from '../../../utils/documentMapper'
 
 // Cleanly defined Document Categories
 export const DOCUMENT_CATEGORIES = {
@@ -61,7 +65,15 @@ export default function DocumentIntelligenceModule() {
     deleteDocument,
     requestMissingDocuments,
     isSimulatingExtraction,
-    runSimulatedExtraction,
+    authSession,
+    authError,
+    extractionError,
+    clearAuthError,
+    clearExtractionError,
+    extractClientDocuments,
+    extractSingleDocument,
+    correctDocumentField,
+    verifyDocumentField,
   } = useApp()
 
   const [activeTab, setActiveTab] = useState('VAULT') // 'VAULT', 'CHECKLIST', 'EXTRACTED_REVIEW', 'HISTORY'
@@ -89,6 +101,10 @@ export default function DocumentIntelligenceModule() {
   // Waive item modal state
   const [waiveModalItem, setWaiveModalItem] = useState(null)
   const [waiveReasonText, setWaiveReasonText] = useState('')
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [correctionTarget, setCorrectionTarget] = useState(null)
+  const [correctionModalError, setCorrectionModalError] = useState(null)
+  const [isSubmittingCorrection, setIsSubmittingCorrection] = useState(false)
 
   // Dynamic Assessment Year from client tax case rather than hardcoding
   const effectiveAy =
@@ -105,32 +121,126 @@ export default function DocumentIntelligenceModule() {
 
   // Simulation steps for layout parsing
   const extractionSteps = [
-    'Verifying client case ownership & SHA-256 integrity hash...',
-    'Decrypting files in private in-memory RAM sandbox...',
-    'Performing OCR & High-Fidelity Table Layout Analysis...',
-    'Extracting Form 16 Part A TDS credits & verifying Employer TAN...',
-    'Reconciling Part B Chapter VI-A Deductions (80C, 80D, 24b)...',
-    'Cross-referencing Form 26AS OLTAS challans against AIS SFT codes...',
-    'Calculating deterministic field confidence scores...',
-    'Extraction Complete (99.2% Average Field Confidence)',
+    'Verifying authenticated session & client/case ownership...',
+    'Inspecting stored PDF files & SHA-256 checksums...',
+    'Executing deterministic layout & coordinate table parsers...',
+    'Extracting Form 16 Part A/B & Form 26AS / AIS schedules...',
+    'Computing coordinate localization evidence scores...',
+    'Deterministic PDF Extraction Complete',
   ]
 
-  const handleStartExtraction = () => {
+  const resolveEffectiveCaseId = () =>
+    activeTaxCase?.caseId ||
+    activeTaxCase?.id ||
+    resolveBackendCaseId(activeClient?.id, effectiveAy)
+
+  const handleStartExtraction = async () => {
+    setUploadError(null)
+    setUploadSuccessMsg(null)
+    clearExtractionError?.()
+
+    if (!authSession?.access_token) {
+      setUploadError(
+        'Backend session required (401). Please sign in before running document extraction.'
+      )
+      setShowAuthModal(true)
+      return
+    }
+
     setExtractionProgressStep(0)
     const interval = setInterval(() => {
-      setExtractionProgressStep((prev) => {
-        if (prev >= extractionSteps.length - 1) {
-          clearInterval(interval)
-          return prev
-        }
-        return prev + 1
-      })
-    }, 400)
+      setExtractionProgressStep((prev) =>
+        prev < extractionSteps.length - 2 ? prev + 1 : prev
+      )
+    }, 350)
 
-    runSimulatedExtraction(() => {
+    try {
+      const extractedDocs = await extractClientDocuments(
+        activeClient.id,
+        resolveEffectiveCaseId()
+      )
       clearInterval(interval)
+      setExtractionProgressStep(extractionSteps.length - 1)
       setActiveTab('EXTRACTED_REVIEW')
-    })
+      setUploadSuccessMsg(
+        `Backend extraction complete for ${extractedDocs.length} document(s).`
+      )
+    } catch (err) {
+      clearInterval(interval)
+      setUploadError(err?.message || 'Document extraction failed.')
+    }
+  }
+
+  const handleExtractSingleDoc = async (docId) => {
+    setUploadError(null)
+    setUploadSuccessMsg(null)
+    if (!authSession?.access_token) {
+      setUploadError('Authentication required (401). Please sign in first.')
+      setShowAuthModal(true)
+      return
+    }
+    try {
+      const updated = await extractSingleDocument(docId, resolveEffectiveCaseId())
+      setUploadSuccessMsg(
+        `Extracted "${updated.name}" (${updated.extractionEngine}).`
+      )
+    } catch (err) {
+      setUploadError(err?.message || 'Single document extraction failed.')
+    }
+  }
+
+  const handleOpenCorrectionModal = (target) => {
+    if (!authSession?.access_token) {
+      setUploadError('Authentication required (401). Sign in as CA staff or partner to make corrections.')
+      setShowAuthModal(true)
+      return
+    }
+    setCorrectionModalError(null)
+    setCorrectionTarget(target)
+  }
+
+  const handleSubmitFieldCorrection = async ({ correctedValue, correctionReason }) => {
+    if (!correctionTarget) return
+    setCorrectionModalError(null)
+    setIsSubmittingCorrection(true)
+    try {
+      const updated = await correctDocumentField(
+        correctionTarget.docId,
+        correctionTarget.fieldKey,
+        {
+          correctedValue,
+          correctionReason,
+          caseId: resolveEffectiveCaseId(),
+        }
+      )
+      setCorrectionTarget(null)
+      setUploadSuccessMsg(
+        `Saved CA correction for "${correctionTarget.fieldLabel}" on ${updated.name}. Original extracted value preserved.`
+      )
+    } catch (err) {
+      setCorrectionModalError(err?.message || 'Failed to save CA field correction.')
+    } finally {
+      setIsSubmittingCorrection(false)
+    }
+  }
+
+  const handleVerifyFieldAction = async (docId, fieldKey) => {
+    setUploadError(null)
+    if (!authSession?.access_token) {
+      setUploadError('Authentication required (401). Sign in as CA staff or partner to verify fields.')
+      setShowAuthModal(true)
+      return
+    }
+    try {
+      const updated = await verifyDocumentField(docId, fieldKey, {
+        caseId: resolveEffectiveCaseId(),
+      })
+      setUploadSuccessMsg(
+        `Marked "${fieldKey}" as VERIFIED on ${updated.name}.`
+      )
+    } catch (err) {
+      setUploadError(err?.message || 'Field verification failed.')
+    }
   }
 
   // Trigger real file input for category
@@ -156,72 +266,39 @@ export default function DocumentIntelligenceModule() {
       return
     }
 
+    if (!authSession?.access_token) {
+      setUploadError('Authentication required (401). Please sign in before uploading documents.')
+      setShowAuthModal(true)
+      return
+    }
+
     setIsUploading(true)
     setUploadError(null)
     setUploadSuccessMsg(null)
 
     try {
-      // 1. Try uploading to backend API
       const result = await apiClient.uploadDocumentVault({
         file,
-        clientPan: activeClient.pan,
         clientId: activeClient.id,
-        caseId: activeTaxCase?.caseId || activeTaxCase?.id,
+        clientPan: activeClient.pan,
+        caseId: resolveEffectiveCaseId(),
         assessmentYear: effectiveAy,
         category: uploadCategoryTarget,
         checklistItemIds: uploadChecklistTarget,
       })
 
-      // 2. Also register in local AppContext for immediate UI reactivity
-      addDocument({
-        id: result.id,
-        clientId: activeClient.id,
-        clientPan: activeClient.pan,
-        caseId: activeTaxCase?.caseId || activeTaxCase?.id,
-        assessmentYear: effectiveAy,
-        name: file.name,
-        category: result.category,
-        subType: DOCUMENT_CATEGORIES[result.category]?.label || result.category,
-        fileSize: `${(file.size / 1024).toFixed(1)} KB`,
-        fileSizeBytes: file.size,
-        fileHashSha256: result.file_hash_sha256,
-        pageCount: result.page_count || 1,
-        processingStatus: result.processing_status || 'PARSED',
-        caReviewStatus: result.ca_review_status || 'PENDING_REVIEW',
-        checklistItemIds: uploadChecklistTarget,
-        isCompletePartB: true,
-        extractionConfidence: 99.1,
-      })
-
-      setUploadSuccessMsg(`Successfully uploaded and verified '${file.name}' (${uploadCategoryTarget})!`)
+      addDocument(result)
+      setUploadSuccessMsg(
+        `Uploaded and verified '${file.name}' (${result.category}) in backend private storage.`
+      )
     } catch (err) {
-      console.warn('Backend upload notice (fallback engaged):', err)
-      // Fallback local registration
-      addDocument({
-        clientId: activeClient.id,
-        clientPan: activeClient.pan,
-        caseId: activeTaxCase?.caseId || activeTaxCase?.id,
-        assessmentYear: effectiveAy,
-        name: file.name,
-        category: uploadCategoryTarget,
-        subType: DOCUMENT_CATEGORIES[uploadCategoryTarget]?.label || uploadCategoryTarget,
-        fileSize: `${(file.size / 1024).toFixed(1)} KB`,
-        fileSizeBytes: file.size,
-        fileHashSha256: `sha256-${Math.random().toString(36).substring(2, 12)}`,
-        pageCount: 2,
-        processingStatus: 'PARSED',
-        caReviewStatus: 'PENDING_REVIEW',
-        checklistItemIds: uploadChecklistTarget,
-        isCompletePartB: true,
-        extractionConfidence: 98.8,
-      })
-      setUploadSuccessMsg(`Uploaded '${file.name}' locally with verified case ownership!`)
+      setUploadError(err?.message || `Failed to upload '${file.name}'.`)
     } finally {
       setIsUploading(false)
     }
   }
 
-  // Handle mock file upload
+  // Handle offline prototype sample fixture (never pretends to be real extraction)
   const handleSimulateDrop = (categoryKey, defaultFileName, checklistIds = []) => {
     const isProfessional = activeClient?.category?.includes('Professional')
     const sanitizedName = (activeClient?.name || 'Taxpayer').replace(/[^a-zA-Z0-9]/g, '_')
@@ -233,42 +310,24 @@ export default function DocumentIntelligenceModule() {
       subType: DOCUMENT_CATEGORIES[categoryKey]?.label || categoryKey,
       fileSize: '1.4 MB',
       fileSizeBytes: 1420000,
-      fileHashSha256: '9f833cb92b1b369c02ffc4033ec09cf8f142e8824de8c6e2888cf3b4ecbe88f1',
+      fileHashSha256: 'local-demo-sample-fixture',
       pageCount: categoryKey === 'AIS' ? 7 : 3,
       checklistItemIds: checklistIds,
-      processingStatus: 'PARSED',
+      processingStatus: 'UPLOADED',
       caReviewStatus: 'PENDING_REVIEW',
-      isCompletePartB: true,
-      extractionConfidence: 99.4,
+      extractionSupported: ['FORM_16', 'FORM_26AS', 'AIS', 'AIS / TIS'].includes(categoryKey),
+      extractionEngine: 'DEMO_FIXTURE',
+      evidenceScore: null,
+      evidenceMethodology: 'COORDINATE_LOCALIZATION_RATIO',
       assessmentYear: effectiveAy,
-      extractedData: isProfessional
-        ? {
-            grossSalary: 0,
-            grossProfessional: 1800000,
-            sec80C: 150000,
-            sec80D: 50000,
-            tdsSalary: 180000,
-          }
-        : {
-            grossSalary: 1500000,
-            standardDeduction: 75000,
-            sec80C: 150000,
-            sec80D: 25000,
-            sec24b: 200000,
-            tdsSalary: 180000,
-          },
-      boundingCitations: [
-        {
-          field: isProfessional ? 'Professional Receipts (Sec 194J)' : 'Gross Salary (Sec 17(1))',
-          value: isProfessional ? '₹18,00,000' : '₹15,00,000',
-          page: 2,
-          line: 'Line 1(a)',
-          bbox: { top: 210, left: 320, width: 140, height: 26 },
-          confidence: 99.4,
-        },
-      ],
+      extractedData: {},
+      citations: [],
+      boundingCitations: [],
+      isBackendSynced: false,
     })
-    setUploadSuccessMsg(`Simulated demo upload for '${fileName}'!`)
+    setUploadSuccessMsg(
+      `Added local demo vault entry '${fileName}'. Upload a real PDF while signed in to run backend extraction.`
+    )
   }
 
   // Open Missing Documents outreach dialog
@@ -285,11 +344,13 @@ export default function DocumentIntelligenceModule() {
   // Generate draft notice preview
   const generateOutreachPreview = async (itemIds, notes) => {
     setIsGeneratingNotice(true)
+    setUploadError(null)
     try {
       const notice = await requestMissingDocuments(activeClient.id, itemIds, notes)
       setOutreachDraftNotice(notice)
     } catch (err) {
-      console.warn('Failed generating notice:', err)
+      setUploadError(err?.message || 'Failed generating missing-documents notice.')
+      setIsOutreachModalOpen(false)
     } finally {
       setIsGeneratingNotice(false)
     }
@@ -304,32 +365,75 @@ export default function DocumentIntelligenceModule() {
   }
 
   // Handle Waive Item Action
-  const handleConfirmWaive = () => {
+  const handleConfirmWaive = async () => {
     if (!waiveModalItem || !waiveReasonText.trim()) return
+    setUploadError(null)
+    try {
+      await updateDocumentReviewStatus(waiveModalItem.docId || 'sim-waive', 'WAIVED', '', waiveReasonText)
+      setWaiveModalItem(null)
+      setWaiveReasonText('')
+      setUploadSuccessMsg(`Checklist item waived with reason recorded in compliance audit log.`)
+    } catch (err) {
+      setUploadError(err?.message || 'Unable to waive document.')
+      setWaiveModalItem(null)
+    }
+  }
 
-    updateDocumentReviewStatus(waiveModalItem.docId || 'sim-waive', 'WAIVED', '', waiveReasonText)
-    setWaiveModalItem(null)
-    setWaiveReasonText('')
-    setUploadSuccessMsg(`Checklist item waived with reason recorded in compliance audit log.`)
+  const handleQuickVerifyDoc = async (docId) => {
+    setUploadError(null)
+    try {
+      await updateDocumentReviewStatus(docId, 'VERIFIED', 'Verified against TRACES/ITR record')
+      setUploadSuccessMsg('Document marked as VERIFIED.')
+    } catch (err) {
+      setUploadError(err?.message || 'Unable to verify document.')
+    }
+  }
+
+  const handleDeleteDoc = async (docId) => {
+    setUploadError(null)
+    try {
+      await deleteDocument(docId)
+      setUploadSuccessMsg('Document removed from vault.')
+    } catch (err) {
+      setUploadError(err?.message || 'Unable to delete document.')
+    }
   }
 
   if (!activeClient) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 p-12 text-center max-w-lg mx-auto my-12 shadow-xs animate-in fade-in">
-        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
-          <FileText className="w-6 h-6" />
+      <>
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center max-w-lg mx-auto my-12 shadow-xs animate-in fade-in">
+          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
+            <FileText className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900 mb-1">No Active Taxpayer Selected</h3>
+          <p className="text-xs text-slate-500 mb-5 leading-relaxed">
+            Sign in to sync authorized taxpayer cases from the backend API, or select an existing client in Firm & Client Operations.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            {!authSession?.access_token && (
+              <button
+                type="button"
+                onClick={() => setShowAuthModal(true)}
+                className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              >
+                Sign In to Backend API
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => navigate('/firm-clients')}
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            >
+              Open Taxpayer Directory
+            </button>
+          </div>
         </div>
-        <h3 className="text-base font-bold text-slate-900 mb-1">No Active Taxpayer Selected</h3>
-        <p className="text-xs text-slate-500 mb-5 leading-relaxed">
-          The firm taxpayer directory is currently empty or no taxpayer is selected. Onboard a client in Firm & Client Operations or select an active taxpayer to upload files, generate checklists, and inspect Document Vault records.
-        </p>
-        <button
-          onClick={() => navigate('/firm-clients')}
-          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-        >
-          Open Taxpayer Directory
-        </button>
-      </div>
+        <BackendAuthModal
+          isOpen={showAuthModal}
+          onClose={() => setShowAuthModal(false)}
+        />
+      </>
     )
   }
 
@@ -395,6 +499,51 @@ export default function DocumentIntelligenceModule() {
       </div>
 
       {/* Upload Notification Alerts */}
+      {/* Backend Auth Status / Error Strip */}
+      {!authSession?.access_token && (
+        <div className="bg-slate-900 text-slate-100 border border-slate-700 px-4 py-3 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              Backend API requires authentication for real PDF upload, deterministic extraction, and CA corrections. Local preview data only is displayed while signed out.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAuthModal(true)}
+            className="px-3 py-1.5 rounded-lg bg-white text-slate-900 font-semibold hover:bg-slate-100 shrink-0 cursor-pointer"
+          >
+            Sign In to Backend API
+          </button>
+        </div>
+      )}
+
+      {authError && (
+        <div role="alert" className="bg-rose-50 border border-rose-300 text-rose-800 px-4 py-3 rounded-xl text-xs flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{authError}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAuthModal(true)}
+              className="px-2.5 py-1 rounded bg-rose-700 text-white font-semibold hover:bg-rose-800 cursor-pointer"
+            >
+              Authenticate
+            </button>
+            <button
+              type="button"
+              onClick={() => clearAuthError?.()}
+              aria-label="Dismiss auth error"
+              className="text-rose-600 hover:text-rose-900 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {uploadError && (
         <div className="bg-rose-50 border border-rose-300 text-rose-800 px-4 py-3 rounded-xl text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -880,7 +1029,7 @@ export default function DocumentIntelligenceModule() {
                               {/* Quick CA Review Action Buttons */}
                               {reviewStatus !== 'VERIFIED' && (
                                 <button
-                                  onClick={() => updateDocumentReviewStatus(doc.id, 'VERIFIED', 'Verified against TRACES/ITR record')}
+                                  onClick={() => handleQuickVerifyDoc(doc.id)}
                                   title="Mark as Verified by CA"
                                   className="p-1 rounded hover:bg-emerald-50 text-emerald-700 border border-transparent hover:border-emerald-200 cursor-pointer"
                                 >
@@ -919,7 +1068,7 @@ export default function DocumentIntelligenceModule() {
                                 <span>Inspect</span>
                               </button>
                               <button
-                                onClick={() => deleteDocument(doc.id)}
+                                onClick={() => handleDeleteDoc(doc.id)}
                                 title="Delete document from vault"
                                 className="p-1.5 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
                               >
@@ -1066,106 +1215,20 @@ export default function DocumentIntelligenceModule() {
 
       {/* TAB 3: EXTRACTED DATA REVIEW & EVIDENCE CITATIONS */}
       {activeTab === 'EXTRACTED_REVIEW' && (
-        <div className="space-y-6">
-          {activeClientDocs.length > 0 ? (
-            <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4 flex items-start gap-3">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-              <div className="text-xs">
-                <h4 className="font-bold text-emerald-900">
-                  AI Entity Extraction Verified Across Uploaded Files ✓
-                </h4>
-                <p className="text-emerald-800 mt-0.5 leading-relaxed">
-                  High-fidelity table layout extraction completed for {activeClient.name} ({activeClient.pan}) for {effectiveAy}. Click any field below to inspect simulated OCR bounding coordinates.
-                </p>
-              </div>
-            </div>
-          ) : null}
-
-          {/* Extracted Fields Table with Interactive Coordinate Citations */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">
-                  AI Entity Extraction & Bounding-Box Evidence — {activeClient.name}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Click any verified field to inspect the exact simulated OCR document coordinate snippet
-                </p>
-              </div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">
-                Deterministic Extraction Concept
-              </span>
-            </div>
-
-            <div className="divide-y divide-slate-100">
-              {activeClientDocs.length === 0 ? (
-                <div className="p-8 text-center text-slate-500">
-                  <FileText className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                  <p className="font-bold text-slate-800">No Documents Uploaded</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Upload files in Document Vault to extract financial entities for {activeClient.name}.
-                  </p>
-                </div>
-              ) : (
-                activeClientDocs.map((doc) => {
-                  const hasCitations = doc.boundingCitations && doc.boundingCitations.length > 0
-                  return (
-                    <div key={doc.id} className="p-4 text-xs">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-blue-600" />
-                          <span className="font-bold text-slate-900">{doc.name}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">
-                            {DOCUMENT_CATEGORIES[doc.category]?.label || doc.category}
-                          </span>
-                        </div>
-                        <span className="text-[11px] font-semibold text-emerald-700">
-                          Average Confidence: {doc.extractionConfidence || 99.2}%
-                        </span>
-                      </div>
-
-                      {/* Bounding box citations */}
-                      {hasCitations ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                          {doc.boundingCitations.map((citation, idx) => (
-                            <div
-                              key={idx}
-                              onClick={() => setSelectedCitationForInspection({ doc, citation })}
-                              className="p-3 rounded-lg border border-slate-200 bg-slate-50/60 hover:bg-blue-50/50 hover:border-blue-300 transition-all cursor-pointer flex flex-col justify-between group"
-                            >
-                              <div>
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 group-hover:text-blue-700">
-                                    Page {citation.page} • {citation.line}
-                                  </span>
-                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-                                    {citation.confidence}%
-                                  </span>
-                                </div>
-                                <p className="font-semibold text-slate-800">{citation.field}</p>
-                              </div>
-
-                              <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between">
-                                <span className="text-sm font-bold text-slate-900">{citation.value}</span>
-                                <span className="text-[11px] text-blue-600 font-semibold group-hover:underline flex items-center gap-0.5">
-                                  View Snippet <ArrowRight className="w-3 h-3" />
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-slate-500 italic text-[11px]">
-                          Pending AI extraction. Click "Run Document Intelligence" to parse coordinate citations.
-                        </div>
-                      )}
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          </div>
-        </div>
+        <ExtractedDataReviewPanel
+          documents={activeClientDocs}
+          authSession={authSession}
+          isExtracting={isSimulatingExtraction}
+          extractionError={extractionError}
+          onExtractAll={handleStartExtraction}
+          onExtractSingle={handleExtractSingleDoc}
+          onOpenCorrection={handleOpenCorrectionModal}
+          onVerifyField={handleVerifyFieldAction}
+          onInspectCitation={(doc, citation, correction) =>
+            setSelectedCitationForInspection({ doc, citation, correction })
+          }
+          onOpenAuthModal={() => setShowAuthModal(true)}
+        />
       )}
 
       {/* TAB 4: AUDIT & INGESTION TRAIL */}
@@ -1470,51 +1533,98 @@ export default function DocumentIntelligenceModule() {
       )}
 
       {/* MODAL: SOURCE EVIDENCE & BOUNDING BOX CITATION */}
-      {selectedCitationForInspection && (
-        <Modal
-          isOpen={!!selectedCitationForInspection}
-          onClose={() => setSelectedCitationForInspection(null)}
-          title={`Source Evidence Citation: ${selectedCitationForInspection.citation.field}`}
-          subtitle={`${selectedCitationForInspection.doc.name} • Page ${selectedCitationForInspection.citation.page}`}
-          maxWidth="max-w-xl"
-        >
-          <div className="space-y-4 text-xs">
-            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-bold uppercase text-blue-800">Verified Extracted Value</span>
-                <h4 className="text-lg font-bold text-blue-950">{selectedCitationForInspection.citation.value}</h4>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] text-blue-700 block">OCR Confidence</span>
-                <span className="font-bold text-emerald-700 text-sm">{selectedCitationForInspection.citation.confidence}%</span>
-              </div>
-            </div>
+      {selectedCitationForInspection && (() => {
+        const { doc, citation, correction } = selectedCitationForInspection
+        const citFieldName = citation.field_name || citation.field || 'Extracted Field'
+        const citPage = citation.page_number ?? citation.page ?? 1
+        const citBBox = citation.bounding_box || citation.bbox || null
+        const citRawText = citation.raw_text || citation.rawText || ''
+        const citEvidenceScore =
+          typeof citation.evidence_score === 'number'
+            ? citation.evidence_score
+            : typeof citation.evidenceScore === 'number'
+            ? citation.evidenceScore
+            : null
+        const citStatus = citation.evidence_status || citation.evidenceStatus || 'UNVERIFIED'
+        const citDocName = citation.document_name || citation.documentName || doc.name || doc.filename
 
-            <div className="border border-slate-300 rounded-lg bg-slate-100 p-6 relative min-h-[160px] flex items-center justify-center">
-              <div className="w-full max-w-md bg-white p-4 rounded border border-slate-200 text-slate-600 font-mono text-[11px] leading-relaxed relative">
-                <p>1. Gross Salary as per provisions contained in section 17(1)</p>
-                <div className="my-1.5 p-1.5 border-2 border-emerald-500 bg-emerald-50/60 rounded flex items-center justify-between font-bold text-slate-900">
-                  <span>(a) Salary as per provisions contained in sec 17(1)</span>
-                  <span className="text-emerald-800">{selectedCitationForInspection.citation.value}</span>
+        return (
+          <Modal
+            isOpen={!!selectedCitationForInspection}
+            onClose={() => setSelectedCitationForInspection(null)}
+            title={`Source Evidence Citation: ${citFieldName}`}
+            subtitle={`${citDocName} • Page ${citPage}`}
+            maxWidth="max-w-xl"
+          >
+            <div className="space-y-4 text-xs">
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between gap-3">
+                <div>
+                  <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                    Original Extracted Value
+                  </span>
+                  <h4 className="text-base font-mono font-bold text-slate-900">
+                    {correction?.original_value !== undefined
+                      ? String(correction.original_value)
+                      : citRawText || 'See snippet below'}
+                  </h4>
+                  {correction?.is_corrected && (
+                    <p className="text-[11px] text-blue-700 mt-1 font-semibold">
+                      CA Override Active: <span className="font-mono">{String(correction.corrected_value)}</span> (By {correction.corrected_by}: {correction.correction_reason})
+                    </p>
+                  )}
                 </div>
-                <p>2. Less: Allowance to the extent exempt under section 10</p>
-                <span className="absolute -top-2.5 right-2 bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.2 rounded shadow-xs">
-                  OCR Coordinate Target [x:320, y:210, w:140, h:26]
-                </span>
+                <div className="text-right shrink-0">
+                  <span className="text-[10px] text-slate-500 block">Evidence Status</span>
+                  <span className="font-bold text-emerald-700 text-xs font-mono">{citStatus}</span>
+                  <span className="block text-[10px] text-slate-500 font-mono">
+                    {citEvidenceScore !== null
+                      ? `Score: ${citEvidenceScore.toFixed(2)} (${doc.evidenceMethodology || 'COORDINATE_LOCALIZATION_RATIO'})`
+                      : 'Score: N/A'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-lg bg-slate-100 p-4 space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-mono text-slate-600">
+                  <span>Source: {citDocName} (Page {citPage})</span>
+                  <span className="bg-white px-2 py-0.5 rounded border border-slate-200">
+                    {Array.isArray(citBBox)
+                      ? `BBox [x0:${citBBox[0]}, y0:${citBBox[1]}, x1:${citBBox[2]}, y1:${citBBox[3]}]`
+                      : 'Coordinates not localized'}
+                  </span>
+                </div>
+                <div className="bg-white p-3.5 rounded border border-slate-200 text-slate-800 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words">
+                  {citRawText || 'No raw text snippet stored for this citation.'}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => setSelectedCitationForInspection(null)}
+                  className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold cursor-pointer transition-all"
+                >
+                  Done
+                </button>
               </div>
             </div>
+          </Modal>
+        )
+      })()}
 
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={() => setSelectedCitationForInspection(null)}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold cursor-pointer active:scale-98 transition-all"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {/* MODAL: CA FIELD CORRECTION */}
+      <FieldCorrectionModal
+        target={correctionTarget}
+        onClose={() => setCorrectionTarget(null)}
+        onSubmit={handleSubmitFieldCorrection}
+        isSubmitting={isSubmittingCorrection}
+        serverError={correctionModalError}
+      />
+
+      {/* MODAL: BACKEND SESSION AUTH */}
+      <BackendAuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+      />
 
       {/* STEP 1: DYNAMIC STATUTORY CHECKLIST & TAX DISCOVERY */}
       {activeClient && (

@@ -11,6 +11,8 @@ Covers:
 - Audit log tracking
 """
 
+import os
+import sys
 import pytest
 import io
 import json
@@ -18,7 +20,11 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services.case_manager import case_manager
 
+sys.path.insert(0, os.path.dirname(__file__))
+from auth_helper import authenticate_test_client
+
 client = TestClient(app)
+client.headers.update(authenticate_test_client(client))
 
 def test_get_client_documents():
     """Verify fetching seeded documents for Arun Kumar Verma."""

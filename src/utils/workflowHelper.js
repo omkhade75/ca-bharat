@@ -1,6 +1,8 @@
 // CA Bharat AI — Central Case Workflow Lifecycle & Status Model
 // Single source of truth for taxpayer case states across all four modules
 
+import { normalizeDocumentCategory } from './documentMapper'
+
 export const WORKFLOW_STAGES = {
   ONBOARDING: 'ONBOARDING',
   CONSENT_PENDING: 'CONSENT_PENDING',
@@ -223,29 +225,75 @@ export function getClientWorkflowStage(client, taxCase, clientDocs = [], isSimul
 }
 
 /**
- * Identify uploaded vs missing document categories for a client.
+ * Identify uploaded vs missing document categories for a client aligned with Step 1 discovery
+ * and Step 5 supporting-document workflow:
+ * - Core statutory tax statements (Form 16 where applicable, Form 26AS, AIS/TIS) are mandatory
+ *   for deterministic 3-way reconciliation.
+ * - Additional supporting categories (Bank Statements, Investment Proofs, Business Records,
+ *   Property Documents, Capital Gains Statements) are contextual: mandatory only when
+ *   triggered by the taxpayer's Step 1 discovery profile, and optional supporting otherwise.
  */
 export function getClientDocumentBreakdown(client, clientDocs = []) {
-  const uploadedCategories = new Set(clientDocs.map((d) => d.category))
-  
-  const categoriesStatus = REQUIRED_DOCUMENT_CATEGORIES.map((cat) => {
-    const isUploaded = uploadedCategories.has(cat.category)
-    const matchingDocs = clientDocs.filter((d) => d.category === cat.category)
+  const uploadedCategories = new Set(clientDocs.map((d) => normalizeDocumentCategory(d.category)))
+  const rawCategories = new Set(
+    clientDocs.map((d) => String(d.rawCategory || d.category || '').trim().toUpperCase())
+  )
+  const discovery = client?.intakeDiscovery || {}
+  const legalType = client?.legalType || 'INDIVIDUAL'
+  const isSalaried =
+    legalType === 'INDIVIDUAL' &&
+    (!client?.occupationProfile || client.occupationProfile === 'SALARIED' || discovery?.salary?.hasIncome === 'YES')
+
+  const hasTriggeredSupporting =
+    discovery?.capitalGains?.hasIncome === 'YES' ||
+    discovery?.businessProfession?.hasIncome === 'YES' ||
+    discovery?.houseProperty?.hasIncome === 'YES'
+
+  const effectiveCategories = REQUIRED_DOCUMENT_CATEGORIES.map((cat) => {
+    let isMandatory = cat.isMandatory
+    let conditionNote = cat.description
+
+    if (cat.category === 'Form 16') {
+      isMandatory = isSalaried || discovery?.salary?.hasIncome === 'YES'
+      if (!isMandatory) {
+        conditionNote = 'Required only if salaried / Form 16A certificates issued.'
+      }
+    } else if (cat.category === 'Bank Statement / Certificate') {
+      isMandatory = hasTriggeredSupporting
+      conditionNote = isMandatory
+        ? 'Triggered by Step 1 Business / House Property / Capital Gains disclosures.'
+        : 'Supporting proof category (Bank Statements, 80C/80D Investment Proofs, P&L) — optional unless claiming exemptions or business/capital gains.'
+    }
+
+    const isUploaded =
+      uploadedCategories.has(cat.category) ||
+      (cat.category === 'Bank Statement / Certificate' &&
+        ['BANK_STATEMENT', 'INVESTMENT_PROOF', 'BUSINESS_RECORD', 'PROPERTY_DOCUMENT', 'CAPITAL_GAINS_STATEMENT'].some((k) =>
+          rawCategories.has(k)
+        ))
+    const matchingDocs = clientDocs.filter(
+      (d) => normalizeDocumentCategory(d.category) === cat.category
+    )
     return {
       ...cat,
+      description: conditionNote,
+      isMandatory,
+      isSupportingCategory: cat.category === 'Bank Statement / Certificate',
       isUploaded,
       matchingDocs,
     }
   })
 
-  const missingCategories = categoriesStatus.filter((c) => !c.isUploaded)
-  const isComplete = missingCategories.filter((c) => c.isMandatory).length === 0
+  const missingCategories = effectiveCategories.filter((c) => !c.isUploaded)
+  const missingMandatoryCategories = effectiveCategories.filter((c) => c.isMandatory && !c.isUploaded)
+  const isComplete = missingMandatoryCategories.length === 0
 
   return {
-    categoriesStatus,
+    categoriesStatus: effectiveCategories,
     missingCategories,
+    missingMandatoryCategories,
     isComplete,
     uploadedCount: clientDocs.length,
-    requiredCount: client?.docsRequired || 4,
+    requiredCount: effectiveCategories.filter((c) => c.isMandatory).length,
   }
 }

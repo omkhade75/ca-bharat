@@ -60,6 +60,10 @@ def _run_migrations(engine):
             ("storage_path", "VARCHAR(512)"),
             ("review_notes", "TEXT"),
             ("waive_reason", "TEXT"),
+            ("corrected_fields_json", "TEXT"),
+            ("extraction_engine", "VARCHAR(32) DEFAULT 'DETERMINISTIC_PDF'"),
+            ("ocr_confidence", "FLOAT"),
+            ("evidence_score", "FLOAT"),
         ]
         with engine.begin() as conn:
             for col_name, col_type in cols_to_add:
@@ -68,6 +72,83 @@ def _run_migrations(engine):
                         conn.execute(text(f"ALTER TABLE uploaded_documents ADD COLUMN {col_name} {col_type}"))
                     except Exception as e:
                         print(f"Migration note for uploaded_documents.{col_name}: {e}")
+
+            # Safe idempotent backfill of client_id, case_id, and extraction_engine for existing rows
+            try:
+                if "taxpayer_profiles" in tables:
+                    conn.execute(
+                        text(
+                            "UPDATE uploaded_documents SET client_id = ("
+                            "SELECT id FROM taxpayer_profiles WHERE taxpayer_profiles.pan = uploaded_documents.client_pan"
+                            ") WHERE client_id IS NULL"
+                        )
+                    )
+                conn.execute(
+                    text(
+                        "UPDATE uploaded_documents SET case_id = 'case-arun-ay2526' "
+                        "WHERE case_id IS NULL AND client_id = 'client-arun-01'"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "UPDATE uploaded_documents SET extraction_engine = CASE "
+                        "WHEN category IN ('FORM_16', 'FORM_26AS', 'AIS', 'TIS', 'AIS_TIS') THEN 'DETERMINISTIC_PDF' "
+                        "ELSE 'UNSUPPORTED_TYPE' END "
+                        "WHERE extraction_engine IS NULL"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "UPDATE uploaded_documents SET evidence_score = ocr_confidence "
+                        "WHERE evidence_score IS NULL AND ocr_confidence IS NOT NULL"
+                    )
+                )
+            except Exception as e:
+                print(f"Migration backfill note for uploaded_documents: {e}")
+
+    if "reconciliation_items" in tables:
+        existing_cols = {col["name"] for col in inspector.get_columns("reconciliation_items")}
+        cols_to_add = [
+            ("client_id", "VARCHAR(64)"),
+            ("case_id", "VARCHAR(64)"),
+            ("row_key", "VARCHAR(64)"),
+            ("category", "VARCHAR(64)"),
+            ("ais_value", "FLOAT"),
+            ("match_status", "VARCHAR(32)"),
+            ("statutory_rule", "TEXT"),
+            ("explanation", "TEXT"),
+            ("resolved_value", "FLOAT DEFAULT 0.0"),
+            ("resolved_by", "VARCHAR(128)"),
+            ("resolved_at", "VARCHAR(64)"),
+            ("source_citations_json", "TEXT"),
+            ("original_values_json", "TEXT"),
+            ("corrections_applied_json", "TEXT"),
+        ]
+        with engine.begin() as conn:
+            for col_name, col_type in cols_to_add:
+                if col_name not in existing_cols:
+                    try:
+                        conn.execute(text(f"ALTER TABLE reconciliation_items ADD COLUMN {col_name} {col_type}"))
+                    except Exception as e:
+                        print(f"Migration note for reconciliation_items.{col_name}: {e}")
+
+    if "tax_computations" in tables:
+        existing_cols = {col["name"] for col in inspector.get_columns("tax_computations")}
+        cols_to_add = [
+            ("client_id", "VARCHAR(64)"),
+            ("case_id", "VARCHAR(64)"),
+            ("data_source", "VARCHAR(64) DEFAULT 'VALIDATED_BACKEND_DOCUMENTS'"),
+            ("validation_status", "VARCHAR(32) DEFAULT 'READY'"),
+            ("validation_gate_json", "TEXT"),
+            ("ca_approver", "VARCHAR(128)"),
+        ]
+        with engine.begin() as conn:
+            for col_name, col_type in cols_to_add:
+                if col_name not in existing_cols:
+                    try:
+                        conn.execute(text(f"ALTER TABLE tax_computations ADD COLUMN {col_name} {col_type}"))
+                    except Exception as e:
+                        print(f"Migration note for tax_computations.{col_name}: {e}")
 
     if "taxpayer_profiles" in tables:
         existing_cols = {col["name"] for col in inspector.get_columns("taxpayer_profiles")}

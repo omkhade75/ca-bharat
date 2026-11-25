@@ -51,7 +51,7 @@ export const PLATFORM_CONTROLS = [
     title: 'AI Reliability',
     whatItMeans: 'Validate structured AI outputs; retain source references and relevant model/version details.',
     architectureScope:
-      'Confidence scoring thresholds (>95% high), cross-field mathematical validation, model telemetry logging, and strict prohibition of LLM-generated tax mathematics.',
+      'Coordinate localization evidence scoring, cross-field mathematical validation, audit trail logging, and strict prohibition of LLM-generated tax mathematics.',
     stagesGoverned: 'Stage 2, 3, 4, 6',
     iconName: 'Cpu',
     riskMitigated: 'OCR hallucinations, incorrect decimal placement, corrupted schedule extraction, and untested model drift.',

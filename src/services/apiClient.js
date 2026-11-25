@@ -1,244 +1,569 @@
 /**
  * CA Bharat AI - Frontend API Client
- * Connects the UI to the Render Python FastAPI Backend & Persistent Database
- * Governed by Income-tax Act, 1961 and Finance Act, 2024
+ * Connects React application to FastAPI backend endpoints with:
+ * - Signed Bearer token authentication headers
+ * - Structured 401/403/HTTP error handling (ApiError)
+ * - Client-ID / Case-ID Step 06 extraction & CA field correction endpoints
+ * - Zero hardcoded credentials or frontend role overrides
  */
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:8000'
-    : 'https://ca-bharat-backend.onrender.com')
+const getApiBaseUrl = () => {
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL
+  }
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ) {
+    return 'http://localhost:8000'
+  }
+  return 'https://ca-bharat-backend.onrender.com'
+}
+
+export const API_BASE_URL = getApiBaseUrl()
+export const SESSION_STORAGE_KEY = 'ca_bharat_backend_session_v1'
+
+export class ApiError extends Error {
+  constructor(status, detail, code = null, payload = null) {
+    const message = ApiError.formatMessage(status, detail)
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.detail = detail
+    this.code = code || ApiError.deriveCode(status)
+    this.payload = payload
+    this.isAuthError = status === 401
+    this.isForbiddenError = status === 403
+  }
+
+  static deriveCode(status) {
+    if (status === 401) return 'UNAUTHORIZED'
+    if (status === 403) return 'FORBIDDEN'
+    if (status === 404) return 'NOT_FOUND'
+    if (status === 400 || status === 422) return 'VALIDATION_ERROR'
+    if (status === 503) return 'SERVICE_UNAVAILABLE'
+    if (status === 0) return 'NETWORK_ERROR'
+    return `HTTP_${status}`
+  }
+
+  static formatMessage(status, detail) {
+    const normalized =
+      typeof detail === 'string' && detail.trim()
+        ? detail.trim()
+        : Array.isArray(detail)
+        ? detail.map((item) => item?.msg || JSON.stringify(item)).join('; ')
+        : ''
+
+    if (status === 401) {
+      return normalized || 'Authentication required or session expired (401).'
+    }
+    if (status === 403) {
+      return normalized || 'Permission denied for this resource or role (403).'
+    }
+    if (normalized) return normalized
+    return `Request failed with status ${status}`
+  }
+}
+
+function safeReadSession() {
+  try {
+    if (typeof window === 'undefined' || !window.sessionStorage) return null
+    const raw = window.sessionStorage.getItem(SESSION_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function safeWriteSession(sessionData) {
+  try {
+    if (typeof window === 'undefined' || !window.sessionStorage) return
+    if (!sessionData) {
+      window.sessionStorage.removeItem(SESSION_STORAGE_KEY)
+    } else {
+      window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData))
+    }
+  } catch {
+    // Ignore storage quota/security errors in restricted environments
+  }
+}
 
 class ApiClient {
   constructor(baseUrl = API_BASE_URL) {
     this.baseUrl = baseUrl.replace(/\/$/, '')
+    this._session = safeReadSession()
+    this._authErrorListeners = new Set()
   }
 
-  async checkHealth() {
-    try {
-      const start = Date.now()
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 6000)
-      const res = await fetch(`${this.baseUrl}/health`, {
-        signal: controller.signal,
-      })
-      clearTimeout(timeoutId)
-      const latency = Date.now() - start
-      if (res.ok) {
-        const data = await res.json()
-        return { online: true, latency, data }
-      }
-      return { online: false, status: res.status }
-    } catch (err) {
-      return { online: false, error: err.message }
+  getSession() {
+    return this._session
+  }
+
+  getAccessToken() {
+    return this._session?.access_token || null
+  }
+
+  setSession(sessionData) {
+    this._session = sessionData || null
+    safeWriteSession(this._session)
+    return this._session
+  }
+
+  clearSession() {
+    this._session = null
+    safeWriteSession(null)
+  }
+
+  /**
+   * Registers a callback invoked when any authenticated request returns 401 or 403.
+   * Returns an unsubscribe function.
+   */
+  onAuthError(listener) {
+    if (typeof listener !== 'function') return () => {}
+    this._authErrorListeners.add(listener)
+    return () => {
+      this._authErrorListeners.delete(listener)
     }
   }
 
+  _notifyAuthError(error) {
+    for (const listener of this._authErrorListeners) {
+      try {
+        listener(error)
+      } catch {
+        // Isolate subscriber errors
+      }
+    }
+  }
+
+  async _fetchRaw(path, options = {}) {
+    const {
+      method = 'GET',
+      body = null,
+      headers = {},
+      query = null,
+      requiresAuth = true,
+      clearSessionOn401 = true,
+    } = options
+
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`
+    const url = new URL(`${this.baseUrl}${normalizedPath}`)
+    if (query && typeof query === 'object') {
+      Object.entries(query).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          url.searchParams.append(key, String(value))
+        }
+      })
+    }
+
+    const requestHeaders = { ...headers }
+    const token = this.getAccessToken()
+    if (token && !requestHeaders.Authorization && !requestHeaders.authorization) {
+      requestHeaders.Authorization = `Bearer ${token}`
+    }
+
+    if (requiresAuth && !requestHeaders.Authorization && !requestHeaders.authorization) {
+      const missingAuthErr = new ApiError(
+        401,
+        'Authentication required. Please sign in with a valid backend session.'
+      )
+      this._notifyAuthError(missingAuthErr)
+      throw missingAuthErr
+    }
+
+    let requestBody = body
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+    if (body !== null && body !== undefined && !isFormData && typeof body !== 'string') {
+      if (!requestHeaders['Content-Type']) {
+        requestHeaders['Content-Type'] = 'application/json'
+      }
+      requestBody = JSON.stringify(body)
+    }
+
+    let response
+    try {
+      response = await fetch(url.toString(), {
+        method,
+        headers: requestHeaders,
+        body: requestBody,
+      })
+    } catch (networkErr) {
+      throw new ApiError(0, networkErr?.message || 'Unable to reach backend API server.')
+    }
+
+    if (!response.ok) {
+      let errorPayload = null
+      let detail = response.statusText
+      try {
+        const text = await response.text()
+        if (text) {
+          errorPayload = JSON.parse(text)
+          detail = errorPayload?.detail || errorPayload?.message || text
+        }
+      } catch {
+        // Keep statusText if response is not JSON
+      }
+
+      const apiError = new ApiError(response.status, detail, null, errorPayload)
+      if (response.status === 401 && clearSessionOn401) {
+        this.clearSession()
+      }
+      if (response.status === 401 || response.status === 403) {
+        this._notifyAuthError(apiError)
+      }
+      throw apiError
+    }
+
+    return response
+  }
+
+  async _request(path, options = {}) {
+    const response = await this._fetchRaw(path, options)
+    if (response.status === 204) return null
+    const text = await response.text()
+    if (!text) return null
+    try {
+      return JSON.parse(text)
+    } catch {
+      return text
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 1. Health & Authentication
+  // ---------------------------------------------------------------------------
+  async checkHealth() {
+    try {
+      const res = await this._request('/health', {
+        requiresAuth: false,
+        clearSessionOn401: false,
+      })
+      return { online: true, ...res }
+    } catch (err) {
+      return { online: false, error: err?.message || 'Backend Unreachable' }
+    }
+  }
+
+  /**
+   * Authenticates against backend POST /api/auth/session with runtime-supplied
+   * credentials. Roles and client/case scopes are resolved strictly server-side.
+   */
+  async authenticateSession({ username, credential }) {
+    const session = await this._request('/api/auth/session', {
+      method: 'POST',
+      requiresAuth: false,
+      clearSessionOn401: false,
+      body: {
+        username: (username || '').trim(),
+        credential: credential || '',
+      },
+    })
+    this.setSession(session)
+    return session
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. Client Master & Step 01 Tax Discovery Intake
+  // ---------------------------------------------------------------------------
   async getClients() {
-    const res = await fetch(`${this.baseUrl}/api/clients`)
-    if (!res.ok) throw new Error(`Failed to fetch clients: ${res.statusText}`)
-    return res.json()
+    return this._request('/api/clients')
   }
 
   async getClientByPan(pan) {
-    const res = await fetch(`${this.baseUrl}/api/clients/${pan}`)
-    if (!res.ok) throw new Error(`Taxpayer ${pan} not found`)
-    return res.json()
+    return this._request(`/api/clients/${encodeURIComponent(pan)}`)
   }
 
   async getClientIntake(pan) {
-    const res = await fetch(`${this.baseUrl}/api/clients/${pan}/intake`)
-    if (!res.ok) throw new Error(`Taxpayer intake for ${pan} not found`)
-    return res.json()
+    return this._request(`/api/clients/${encodeURIComponent(pan)}/intake`)
   }
 
   async putClientIntake(pan, intakeData) {
-    const res = await fetch(`${this.baseUrl}/api/clients/${pan}/intake`, {
+    return this._request(`/api/clients/${encodeURIComponent(pan)}/intake`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(intakeData),
+      body: intakeData,
     })
-    if (!res.ok) throw new Error(`Failed to update intake for ${pan}: ${res.statusText}`)
-    return res.json()
   }
 
   async onboardTaxpayer(taxpayerData) {
-    const res = await fetch(`${this.baseUrl}/api/clients`, {
+    return this._request('/api/clients', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(taxpayerData),
+      body: taxpayerData,
     })
-    if (!res.ok) throw new Error(`Onboarding failed: ${res.statusText}`)
-    return res.json()
   }
 
-  async extractDocument(file, clientPan = 'ABCPA1092F', docType = 'form16') {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('client_pan', clientPan)
+  // ---------------------------------------------------------------------------
+  // 3. Step 05 & Step 06 Document Vault, Extraction, Corrections & Verification
+  // ---------------------------------------------------------------------------
 
-    const endpoint =
-      docType === 'form26as'
-        ? '/api/extract/form26as'
-        : docType === 'ais_tis'
-        ? '/api/extract/ais-tis'
-        : '/api/extract/form16'
-
-    const res = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'POST',
-      body: formData,
+  /**
+   * Retrieves documents strictly by internal client_id & optional case_id.
+   * Never exposes PAN in API URLs.
+   */
+  async getDocumentsByClient(clientId, caseId = null) {
+    return this._request(`/api/documents/client/${encodeURIComponent(clientId)}`, {
+      query: caseId ? { case_id: caseId } : null,
     })
-    if (!res.ok) throw new Error(`Document extraction failed: ${res.statusText}`)
-    return res.json()
-  }
-
-  async getClientDocuments(pan, caseId = null) {
-    const url = new URL(`${this.baseUrl}/api/documents/${pan}`)
-    if (caseId) url.searchParams.append('case_id', caseId)
-    const res = await fetch(url.toString())
-    if (!res.ok) throw new Error(`Failed to fetch documents for ${pan}: ${res.statusText}`)
-    return res.json()
   }
 
   async uploadDocumentVault({
     file,
-    clientPan,
     clientId,
+    clientPan = null,
     caseId,
-    assessmentYear,
+    assessmentYear = 'AY 2025-26',
     category,
     checklistItemIds = [],
+    notes = '',
   }) {
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('client_pan', clientPan)
     if (clientId) formData.append('client_id', clientId)
+    if (clientPan) formData.append('client_pan', clientPan)
     if (caseId) formData.append('case_id', caseId)
-    if (assessmentYear) formData.append('assessment_year', assessmentYear)
-    if (category) formData.append('category', category)
-    if (checklistItemIds && checklistItemIds.length > 0) {
-      formData.append('checklist_item_ids', JSON.stringify(checklistItemIds))
-    }
+    formData.append('assessment_year', assessmentYear)
+    formData.append('category', category)
+    formData.append('checklist_item_ids', JSON.stringify(checklistItemIds))
+    formData.append('notes', notes)
 
-    const res = await fetch(`${this.baseUrl}/api/documents/upload`, {
+    return this._request('/api/documents/upload', {
       method: 'POST',
       body: formData,
     })
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}))
-      throw new Error(errJson.detail || `Upload failed: ${res.statusText}`)
-    }
-    return res.json()
+  }
+
+  async extractAllDocuments({ clientId, caseId = null }) {
+    return this._request('/api/documents/extract-all', {
+      method: 'POST',
+      body: {
+        client_id: clientId,
+        ...(caseId ? { case_id: caseId } : {}),
+      },
+    })
+  }
+
+  async extractDocumentById(docId, caseId = null) {
+    return this._request(`/api/documents/${encodeURIComponent(docId)}/extract`, {
+      method: 'POST',
+      query: caseId ? { case_id: caseId } : null,
+    })
+  }
+
+  async correctDocumentField(
+    docId,
+    fieldKey,
+    { correctedValue, correctionReason, caseId = null }
+  ) {
+    return this._request(
+      `/api/documents/${encodeURIComponent(docId)}/fields/${encodeURIComponent(fieldKey)}`,
+      {
+        method: 'PATCH',
+        body: {
+          field_key: fieldKey,
+          corrected_value: correctedValue,
+          correction_reason: correctionReason,
+          ...(caseId ? { case_id: caseId } : {}),
+        },
+      }
+    )
+  }
+
+  async verifyDocumentField(docId, fieldKey, { caseId = null } = {}) {
+    return this._request(
+      `/api/documents/${encodeURIComponent(docId)}/fields/${encodeURIComponent(fieldKey)}/verify`,
+      {
+        method: 'PATCH',
+        body: {
+          field_key: fieldKey,
+          ...(caseId ? { case_id: caseId } : {}),
+        },
+      }
+    )
   }
 
   async updateDocumentStatus(docId, caReviewStatus, reviewNotes = null, waiveReason = null) {
-    const res = await fetch(`${this.baseUrl}/api/documents/${docId}/status`, {
+    return this._request(`/api/documents/${encodeURIComponent(docId)}/status`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         ca_review_status: caReviewStatus,
         review_notes: reviewNotes,
         waive_reason: waiveReason,
-      }),
+      },
     })
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}))
-      throw new Error(errJson.detail || `Failed to update status: ${res.statusText}`)
-    }
-    return res.json()
   }
 
-  async requestMissingDocuments({ clientPan, caseId = null, checklistItemIds = [], customNotes = '' }) {
-    const res = await fetch(`${this.baseUrl}/api/documents/request-missing`, {
+  async requestMissingDocuments({
+    clientId = null,
+    clientPan = null,
+    caseId = null,
+    checklistItemIds = [],
+    customNotes = '',
+  }) {
+    return this._request('/api/documents/request-missing', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_pan: clientPan,
-        case_id: caseId,
+      body: {
+        ...(clientId ? { client_id: clientId } : {}),
+        ...(clientPan ? { client_pan: clientPan } : {}),
+        ...(caseId ? { case_id: caseId } : {}),
         checklist_item_ids: checklistItemIds,
         custom_notes: customNotes,
-      }),
+      },
     })
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}))
-      throw new Error(errJson.detail || `Failed to generate missing documents notice: ${res.statusText}`)
-    }
-    return res.json()
   }
 
   async deleteDocument(docId) {
-    const res = await fetch(`${this.baseUrl}/api/documents/${docId}`, {
+    return this._request(`/api/documents/${encodeURIComponent(docId)}`, {
       method: 'DELETE',
     })
-    if (!res.ok) throw new Error(`Failed to delete document: ${res.statusText}`)
-    return res.json()
+  }
+
+  // Legacy direct extraction endpoints (kept authenticated if invoked directly)
+  async extractDocument(file, clientPan, docType = 'form16') {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('client_pan', clientPan)
+
+    const endpoints = {
+      form16: '/api/extract/form16',
+      form26as: '/api/extract/form26as',
+      ais: '/api/extract/ais',
+      tis: '/api/extract/ais',
+    }
+    const target = endpoints[docType.toLowerCase()] || '/api/extract/form16'
+    return this._request(target, {
+      method: 'POST',
+      body: formData,
+    })
+  }
+
+  // ---------------------------------------------------------------------------
+  // 4. 3-Way Reconciliation Matrix (Client-ID & Legacy PAN Routes)
+  // ---------------------------------------------------------------------------
+  async runBackendReconciliation(clientId, { caseId = null, assessmentYear = '2025-26' } = {}) {
+    return this._request(`/api/reconcile/client/${encodeURIComponent(clientId)}/run`, {
+      method: 'POST',
+      body: {
+        ...(caseId ? { case_id: caseId } : {}),
+        assessment_year: assessmentYear,
+      },
+    })
+  }
+
+  async getBackendReconciliation(clientId, caseId = null) {
+    return this._request(`/api/reconcile/client/${encodeURIComponent(clientId)}`, {
+      query: caseId ? { case_id: caseId } : null,
+    })
+  }
+
+  async resolveBackendReconciliationRow(
+    clientId,
+    rowId,
+    { action, caNotes, resolvedValue = null, caseId = null }
+  ) {
+    return this._request(
+      `/api/reconcile/client/${encodeURIComponent(clientId)}/rows/${encodeURIComponent(rowId)}`,
+      {
+        method: 'PATCH',
+        body: {
+          action,
+          ca_notes: caNotes,
+          ...(resolvedValue !== null && resolvedValue !== undefined
+            ? { resolved_value: Number(resolvedValue) }
+            : {}),
+          ...(caseId ? { case_id: caseId } : {}),
+        },
+      }
+    )
   }
 
   async run3WayReconciliation(clientPan, assessmentYear = '2025-26') {
-    const res = await fetch(`${this.baseUrl}/api/reconcile/run`, {
+    return this._request('/api/reconcile/run', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_pan: clientPan,
-        assessment_year: assessmentYear,
-      }),
+      body: { client_pan: clientPan, assessment_year: assessmentYear },
     })
-    if (!res.ok) throw new Error(`Reconciliation failed: ${res.statusText}`)
-    return res.json()
   }
 
   async resolveReconciliationItem({ clientPan, rowId, action, caNotes }) {
-    const res = await fetch(`${this.baseUrl}/api/reconcile/resolve-item`, {
+    return this._request('/api/reconcile/resolve-item', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         client_pan: clientPan,
         row_id: rowId,
         action,
         ca_notes: caNotes,
-      }),
+      },
     })
-    if (!res.ok) throw new Error(`Failed to resolve item: ${res.statusText}`)
-    return res.json()
+  }
+
+  // ---------------------------------------------------------------------------
+  // 5. Tax Calculation & CA Sign-Off (Validated Backend Data)
+  // ---------------------------------------------------------------------------
+  async runBackendTaxCalculation(clientId, { caseId = null, assessmentYear = '2025-26' } = {}) {
+    return this._request(`/api/calculate/client/${encodeURIComponent(clientId)}/tax`, {
+      method: 'POST',
+      body: {
+        ...(caseId ? { case_id: caseId } : {}),
+        assessment_year: assessmentYear,
+      },
+    })
+  }
+
+  async getBackendTaxCalculation(clientId, caseId = null) {
+    return this._request(`/api/calculate/client/${encodeURIComponent(clientId)}`, {
+      query: caseId ? { case_id: caseId } : null,
+    })
+  }
+
+  async submitBackendCaSignOff(clientId, { caseId = null, caNotes, chosenRegime }) {
+    return this._request(`/api/calculate/client/${encodeURIComponent(clientId)}/sign-off`, {
+      method: 'POST',
+      body: {
+        ...(caseId ? { case_id: caseId } : {}),
+        verification_notes: caNotes,
+        chosen_regime: chosenRegime,
+      },
+    })
   }
 
   async calculateTax(calculationPayload) {
-    const res = await fetch(`${this.baseUrl}/api/calculate/tax`, {
+    return this._request('/api/calculate/tax', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(calculationPayload),
+      body: calculationPayload,
     })
-    if (!res.ok) throw new Error(`Tax calculation failed: ${res.statusText}`)
-    return res.json()
   }
 
   async caSignOff({ clientPan, caNotes, approvedRegime }) {
-    const res = await fetch(`${this.baseUrl}/api/calculate/ca-sign-off`, {
+    return this._request('/api/calculate/ca-sign-off', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         client_pan: clientPan,
-        ca_notes: caNotes,
-        approved_regime: approvedRegime,
-      }),
+        verification_notes: caNotes,
+        chosen_regime: approvedRegime,
+      },
     })
-    if (!res.ok) throw new Error(`CA Sign-off failed: ${res.statusText}`)
-    return res.json()
   }
 
+  // ---------------------------------------------------------------------------
+  // 6. Regulatory Exports & Audit Logs
+  // ---------------------------------------------------------------------------
   getExcelWorkpaperUrl(pan) {
-    return `${this.baseUrl}/api/export/workpaper/${pan}`
+    return `${this.baseUrl}/api/export/workpaper/${encodeURIComponent(pan)}`
   }
 
   getCbdtJsonUrl(pan) {
-    return `${this.baseUrl}/api/export/cbdt-json/${pan}`
+    return `${this.baseUrl}/api/export/cbdt-json/${encodeURIComponent(pan)}`
   }
 
-  async getAuditLogs(limit = 50) {
-    const res = await fetch(`${this.baseUrl}/api/audit/logs?limit=${limit}`)
-    if (!res.ok) throw new Error(`Failed to fetch audit stream: ${res.statusText}`)
-    return res.json()
+  async downloadExcelWorkpaper(pan) {
+    const response = await this._fetchRaw(`/api/export/workpaper/${encodeURIComponent(pan)}`)
+    return response.blob()
+  }
+
+  async fetchCbdtJson(pan) {
+    return this._request(`/api/export/cbdt-json/${encodeURIComponent(pan)}`)
+  }
+
+  async getAuditLogs() {
+    return this._request('/api/audit/logs')
   }
 }
 

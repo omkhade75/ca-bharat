@@ -14,14 +14,20 @@ import {
   Send,
   Copy,
   Clock,
-  Upload
+  Upload,
+  RefreshCw,
+  Lock,
+  FileText,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { useApp } from '../../../context/AppContext'
 import { formatINR, formatDate } from '../../../utils/formatters'
 import { compareTaxRegimes } from '../../../utils/taxCalculator'
+import { resolveBackendCaseId } from '../../../utils/documentMapper'
 import Badge from '../../common/Badge'
 import Modal from '../../common/Modal'
+import BackendAuthModal from '../../common/BackendAuthModal'
+import DiscrepancyResolutionModal from './DiscrepancyResolutionModal'
 import apiClient from '../../../services/apiClient'
 
 export default function TaxReconciliationModule() {
@@ -38,40 +44,179 @@ export default function TaxReconciliationModule() {
     requestCorrection,
     recordReportGenerated,
     activeAy,
+    authSession,
+    backendReconciliation,
+    backendTaxComparison,
+    isLoadingReconciliation,
+    reconciliationError,
+    isComputingTax,
+    taxError,
+    clearReconciliationError,
+    runClientReconciliation,
+    resolveReconciliationIssue,
+    computeClientTax,
+    approveClientTaxBackend,
   } = useApp()
 
   const [activeTab, setActiveTab] = useState('RECONCILIATION') // 'RECONCILIATION', 'OPTIMIZER', 'CA_SIGN_OFF'
   const [isItrJsonOpen, setIsItrJsonOpen] = useState(false)
+  const [backendItrJson, setBackendItrJson] = useState(null)
   const [isClarificationOpen, setIsClarificationOpen] = useState(false)
   const [clarificationReason, setClarificationReason] = useState('')
   const [caApprovalNotes, setCaApprovalNotes] = useState('')
   const [copiedJson, setCopiedJson] = useState(false)
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [resolutionTargetRow, setResolutionTargetRow] = useState(null)
+  const [resolutionError, setResolutionError] = useState(null)
+  const [isResolvingRow, setIsResolvingRow] = useState(false)
+  const [signOffError, setSignOffError] = useState(null)
+  const [signOffSuccessMsg, setSignOffSuccessMsg] = useState(null)
+  const [isSigningOff, setIsSigningOff] = useState(false)
 
-  // Incomplete intake detection for Requirement 3 & 4
-  const isIncomplete =
-    activeWorkflowStage === 'ONBOARDING' ||
-    activeWorkflowStage === 'CONSENT_PENDING' ||
-    activeWorkflowStage === 'DOCUMENTS_PENDING' ||
-    (activeClientDocs.length < (activeClient?.docsRequired || 4) &&
-      (!activeTaxCase?.incomes?.salary && !activeTaxCase?.incomes?.otherSources && !activeTaxCase?.reconciliationItems?.length))
+  const isAuthenticatedBackend = Boolean(authSession?.access_token)
+  const resolvedCaseId =
+    activeTaxCase?.caseId ||
+    activeTaxCase?.id ||
+    resolveBackendCaseId(activeClient?.id, activeAy)
 
-  // Compute live tax comparison using deterministic engine with safe TDS extraction (no false 180420 fallback!)
-  const actualTds = activeTaxCase?.taxesPaid?.totalTds ?? 0
-  const taxComparison =
-    activeTaxCase && !isIncomplete
-      ? compareTaxRegimes(
-          activeTaxCase.incomes,
-          activeTaxCase.deductions,
-          actualTds
-        )
+  // Determine authoritative reconciliation items (never use client-side fallback when authenticated)
+  const reconciliationItems = isAuthenticatedBackend
+    ? backendReconciliation?.rows || []
+    : activeTaxCase?.reconciliationItems || []
+
+  const hasValidatedBackendDocs = isAuthenticatedBackend
+    ? Boolean(
+        backendReconciliation?.sourceDocuments?.some((sd) => sd.has_extracted_data) ||
+          backendTaxComparison?.validationGate?.has_validated_data ||
+          activeClientDocs?.some((d) => d.processingStatus === 'PARSED')
+      )
+    : true
+
+  const isIncomplete = isAuthenticatedBackend
+    ? !activeDocBreakdown?.isComplete && !hasValidatedBackendDocs
+    : activeWorkflowStage === 'ONBOARDING' ||
+      activeWorkflowStage === 'CONSENT_PENDING' ||
+      (!activeDocBreakdown?.isComplete &&
+        !activeTaxCase?.incomes?.salary &&
+        !activeTaxCase?.incomes?.otherSources &&
+        !activeTaxCase?.reconciliationItems?.length)
+
+  // Compute tax comparison: strictly consume backend TaxCalculator result when authenticated
+  const actualTds = isAuthenticatedBackend
+    ? backendTaxComparison?.tdsPaid ?? 0
+    : activeTaxCase?.taxesPaid?.totalTds ?? 0
+
+  const taxComparison = isAuthenticatedBackend
+    ? hasValidatedBackendDocs
+      ? backendTaxComparison
       : null
+    : activeTaxCase && !isIncomplete
+    ? compareTaxRegimes(
+        activeTaxCase.incomes,
+        activeTaxCase.deductions,
+        actualTds
+      )
+    : null
 
-  const pendingDiscrepancies =
-    activeTaxCase?.reconciliationItems?.filter((i) => !i.isAccepted && i.status.includes('MISMATCH')) || []
+  const pendingDiscrepancies = reconciliationItems.filter(
+    (i) => !i.isAccepted && !i.isResolved
+  )
 
-  // Handle CA Sign-off with celebration confetti
-  const handleApproveCase = () => {
-    approveTaxCase(activeTaxCase.caseId, caApprovalNotes)
+  const isCaseApproved = isAuthenticatedBackend
+    ? backendTaxComparison?.caSignOffStatus === 'CA_APPROVED'
+    : Boolean(activeTaxCase?.approval?.isApproved)
+
+  const approvalDetails = isAuthenticatedBackend
+    ? {
+        isApproved: isCaseApproved,
+        approvedBy: backendTaxComparison?.caApprover,
+        approvedAt: backendTaxComparison?.caApprovalTimestamp,
+        sha256Hash: backendTaxComparison?.verificationHash,
+      }
+    : activeTaxCase?.approval
+
+  const handleRunBackendRecon = async () => {
+    setSignOffError(null)
+    clearReconciliationError?.()
+    if (!isAuthenticatedBackend) {
+      setShowAuthModal(true)
+      return
+    }
+    try {
+      const ayClean = String(activeAy || '2025-26').replace(/^AY\s*/i, '')
+      await runClientReconciliation(activeClient.id, resolvedCaseId, ayClean)
+    } catch {
+      // surfaced via reconciliationError
+    }
+  }
+
+  const handleSubmitRowResolution = async ({ action, caNotes, resolvedValue }) => {
+    if (!resolutionTargetRow) return
+    setResolutionError(null)
+    if (!isAuthenticatedBackend) {
+      acceptDiscrepancy(resolutionTargetRow.id)
+      setResolutionTargetRow(null)
+      return
+    }
+    setIsResolvingRow(true)
+    try {
+      await resolveReconciliationIssue(activeClient.id, resolutionTargetRow.id, {
+        action,
+        caNotes,
+        resolvedValue,
+        caseId: resolvedCaseId,
+      })
+      setResolutionTargetRow(null)
+    } catch (err) {
+      setResolutionError(err?.message || 'Unable to record CA resolution.')
+    } finally {
+      setIsResolvingRow(false)
+    }
+  }
+
+  const handleViewItrJson = async () => {
+    setIsItrJsonOpen(true)
+    if (isAuthenticatedBackend && activeClient?.pan) {
+      try {
+        const livePayload = await apiClient.fetchCbdtJson(activeClient.pan)
+        setBackendItrJson(JSON.stringify(livePayload, null, 2))
+      } catch {
+        setBackendItrJson(null)
+      }
+    }
+  }
+
+  // Handle CA Sign-off (Backend persisted when authenticated)
+  const handleApproveCase = async () => {
+    setSignOffError(null)
+    setSignOffSuccessMsg(null)
+    if (isAuthenticatedBackend) {
+      setIsSigningOff(true)
+      try {
+        const res = await approveClientTaxBackend(activeClient.id, {
+          caseId: resolvedCaseId,
+          caNotes:
+            caApprovalNotes ||
+            'Verified Form 16, TRACES 26AS, AIS citations, and resolved discrepancies.',
+          chosenRegime:
+            backendTaxComparison?.recommendedRegimeEnum || 'NEW_REGIME_115BAC',
+        })
+        setSignOffSuccessMsg(res.message || 'CA sign-off recorded in audit trail.')
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 },
+        })
+        await handleViewItrJson()
+      } catch (err) {
+        setSignOffError(err?.message || 'CA sign-off failed.')
+      } finally {
+        setIsSigningOff(false)
+      }
+      return
+    }
+
+    approveTaxCase(activeTaxCase?.caseId, caApprovalNotes)
     confetti({
       particleCount: 80,
       spread: 70,
@@ -83,24 +228,33 @@ export default function TaxReconciliationModule() {
   // Handle Request Clarification
   const handleSendClarification = (e) => {
     e.preventDefault()
-    requestCorrection(activeTaxCase.caseId, clarificationReason || 'Clarification required regarding AIS mismatch.')
+    requestCorrection(activeTaxCase?.caseId, clarificationReason || 'Clarification required regarding AIS mismatch.')
     setIsClarificationOpen(false)
     alert(`Clarification request sent to ${activeClient?.name} via WhatsApp alert.`)
   }
 
-  // Generate Sample Government ITR-2 JSON Schema
-  const generatedItrJson = activeTaxCase
-    ? JSON.stringify(
+  // Official CBDT ITR JSON (live backend payload when authenticated, schema preview when signed out)
+  const generatedItrJson =
+    isAuthenticatedBackend && backendItrJson
+      ? backendItrJson
+      : activeTaxCase || taxComparison
+      ? JSON.stringify(
         {
           ITR: {
             ITR2: {
               CreationInfo: {
                 SWVersionNo: 'CA_BHARAT_AI_V1.0',
                 SWCreatedBy: 'Sharma & Co. Chartered Accountants',
-                JSONCreatedBy: 'CA Rajesh Sharma (FCA #049281)',
-                CreationDate: activeTaxCase.approval?.approvedAt?.split('T')[0] || '2026-07-28',
+                JSONCreatedBy: taxComparison?.caApprover || 'CA Rajesh Sharma (FCA #049281)',
+                CreationDate:
+                  taxComparison?.caApprovalTimestamp?.split('T')[0] ||
+                  activeTaxCase?.approval?.approvedAt?.split('T')[0] ||
+                  '2026-07-28',
                 IntermediaryCity: 'Mumbai',
-                Digest: activeTaxCase.approval?.sha256Hash || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+                Digest:
+                  taxComparison?.verificationHash ||
+                  activeTaxCase?.approval?.sha256Hash ||
+                  'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
               },
               PersonalInfo: {
                 AssesseeName: {
@@ -118,14 +272,21 @@ export default function TaxReconciliationModule() {
                 ResidentialStatus: 'RES',
               },
               PartB_TI: {
-                Salaries: activeTaxCase.incomes.salary,
-                IncomeFromOtherSources: activeTaxCase.incomes.otherSources,
+                Salaries: taxComparison?.incomeSummary?.salary ?? activeTaxCase?.incomes?.salary ?? 0,
+                IncomeFromOtherSources:
+                  taxComparison?.incomeSummary?.otherSources ?? activeTaxCase?.incomes?.otherSources ?? 0,
                 CapitalGains: {
-                  LTCG: activeTaxCase.incomes.capitalGainsLTCG,
+                  LTCG:
+                    taxComparison?.incomeSummary?.capitalGains ??
+                    activeTaxCase?.incomes?.capitalGainsLTCG ??
+                    0,
                 },
-                GrossTotalIncome: taxComparison?.oldRegime?.grossTotalIncome,
-                TotalDeductions: taxComparison?.oldRegime?.totalDeductions,
-                TotalIncome: taxComparison?.oldRegime?.netTaxableIncome,
+                GrossTotalIncome:
+                  taxComparison?.incomeSummary?.grossTotalIncome ??
+                  taxComparison?.oldRegime?.grossTotalIncome ??
+                  0,
+                TotalDeductions: taxComparison?.oldRegime?.totalDeductions ?? 0,
+                TotalIncome: taxComparison?.oldRegime?.netTaxableIncome ?? 0,
               },
               PartB_TTI: {
                 NetTaxLiability: taxComparison?.activeTaxLiability,
@@ -169,22 +330,18 @@ export default function TaxReconciliationModule() {
     recordReportGenerated(activeTaxCase?.id || activeTaxCase?.caseId)
     try {
       const pan = activeClient?.pan || 'ABCPA1092F'
-      const apiUrl = apiClient.getExcelWorkpaperUrl(pan)
-      const response = await fetch(apiUrl)
-      if (response.ok) {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `CA_Audit_Workpaper_${pan}_AY2025-26.xlsx`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        window.URL.revokeObjectURL(url)
-        return
-      }
+      const blob = await apiClient.downloadExcelWorkpaper(pan)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `CA_Audit_Workpaper_${pan}_AY2025-26.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+      return
     } catch {
-      // Fallback to static pre-generated Excel workpaper
+      // Fallback to static pre-generated Excel workpaper when offline/unauthenticated
     }
     const a = document.createElement('a')
     a.href = '/downloads/CA_Audit_Workpaper_AY2025-26.xlsx'
@@ -196,21 +353,38 @@ export default function TaxReconciliationModule() {
 
   if (!activeClient) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 p-12 text-center max-w-lg mx-auto my-12 shadow-xs animate-in fade-in">
-        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
-          <FileText className="w-6 h-6" />
+      <>
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center max-w-lg mx-auto my-12 shadow-xs animate-in fade-in">
+          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
+            <FileText className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900 mb-1">No Active Taxpayer Selected</h3>
+          <p className="text-xs text-slate-500 mb-5 leading-relaxed">
+            Sign in to load synchronized backend taxpayer profiles or select an existing client in Firm & Client Operations.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            {!isAuthenticatedBackend && (
+              <button
+                type="button"
+                onClick={() => setShowAuthModal(true)}
+                className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              >
+                Sign In to Backend API
+              </button>
+            )}
+            <button
+              onClick={() => navigate('/firm-clients')}
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            >
+              Open Taxpayer Directory
+            </button>
+          </div>
         </div>
-        <h3 className="text-base font-bold text-slate-900 mb-1">No Active Taxpayer Selected</h3>
-        <p className="text-xs text-slate-500 mb-5 leading-relaxed">
-          The firm taxpayer directory is currently empty or no taxpayer is selected. Onboard a client in Firm & Client Operations or seed statutory profiles to run 3-way reconciliation and tax calculations.
-        </p>
-        <button
-          onClick={() => navigate('/firm-clients')}
-          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-        >
-          Open Taxpayer Directory
-        </button>
-      </div>
+        <BackendAuthModal
+          isOpen={showAuthModal}
+          onClose={() => setShowAuthModal(false)}
+        />
+      </>
     )
   }
 
@@ -243,7 +417,7 @@ export default function TaxReconciliationModule() {
             </span>
           </div>
 
-          {activeTaxCase?.approval?.isApproved ? (
+          {isCaseApproved ? (
             <div className="flex items-center gap-2">
               <button
                 onClick={downloadExcelWorkpaper}
@@ -254,7 +428,7 @@ export default function TaxReconciliationModule() {
                 <span>Export Excel Workpaper (.xlsx)</span>
               </button>
               <button
-                onClick={() => setIsItrJsonOpen(true)}
+                onClick={handleViewItrJson}
                 className="px-3.5 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-98 transition-all"
               >
                 <FileCheck2 className="w-4 h-4" />
@@ -262,16 +436,59 @@ export default function TaxReconciliationModule() {
               </button>
             </div>
           ) : (
-            <button
-              onClick={() => setActiveTab('CA_SIGN_OFF')}
-              className="px-3.5 py-2 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-98 transition-all"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Review & Sign-Off</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRunBackendRecon}
+                disabled={isLoadingReconciliation}
+                className="px-3.5 py-2 text-xs font-bold rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingReconciliation ? 'animate-spin' : ''}`} />
+                <span>{isLoadingReconciliation ? 'Reconciling...' : 'Run 3-Way Backend Audit'}</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('CA_SIGN_OFF')}
+                className="px-3.5 py-2 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-98 transition-all"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Review & Sign-Off</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
+
+      {!isAuthenticatedBackend && (
+        <div className="bg-slate-900 text-slate-100 border border-slate-700 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              Unauthenticated Preview: Sign in to run live backend 3-way reconciliation from extracted PDFs and persist CA discrepancy resolutions & validated tax calculations.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAuthModal(true)}
+            className="px-3 py-1.5 rounded-lg bg-white text-slate-900 font-semibold hover:bg-slate-100 shrink-0 cursor-pointer"
+          >
+            Sign In to Backend API
+          </button>
+        </div>
+      )}
+
+      {(reconciliationError || taxError || signOffError) && (
+        <div role="alert" className="bg-rose-50 border border-rose-300 text-rose-800 px-4 py-3 rounded-xl text-xs flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+          <span>{signOffError || reconciliationError || taxError}</span>
+        </div>
+      )}
+
+      {signOffSuccessMsg && (
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 px-4 py-3 rounded-xl text-xs flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{signOffSuccessMsg}</span>
+        </div>
+      )}
 
       {/* Prominent Statutory Disclaimer Banner */}
       <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-3.5 flex items-start gap-3 shadow-xs">
@@ -392,42 +609,42 @@ export default function TaxReconciliationModule() {
       {activeTab === 'RECONCILIATION' && (
         <div className="space-y-6">
           {/* Summary Banner / Missing Documents Warning / Unextracted Notice */}
-          {isIncomplete || !activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0 ? (
+          {isIncomplete || reconciliationItems.length === 0 ? (
             <div className="bg-amber-50 border border-amber-300 rounded-xl p-5 shadow-xs space-y-3">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div>
                   <h4 className="text-sm font-bold text-amber-900">
                     {isIncomplete
-                      ? 'Pending Document Intake — Reconciliation Not Possible'
-                      : 'AI Extraction Pending — Reconciliation Matrix Not Generated'}
+                      ? 'Pending Mandatory Statutory Documents — Reconciliation Not Ready'
+                      : 'Backend Extraction / Reconciliation Pending — Matrix Not Generated'}
                   </h4>
                   <p className="text-xs text-amber-800 mt-1 leading-relaxed">
                     {isIncomplete
-                      ? `Taxpayer ${activeClient?.name} (${activeClient?.pan}) has uploaded only ${activeClientDocs.length} of ${activeClient?.docsRequired || 4} expected document categories. Complete 3-way cross-referencing between Form 16, TRACES 26AS, and AIS requires all statutory documents to be uploaded and parsed in the Document Vault.`
-                      : `Documents are uploaded for ${activeClient?.name}, but simulated AI extraction has not been executed yet. Run simulated extraction in Document Vault to generate the 3-way reconciliation matrix.`}
+                      ? `Taxpayer ${activeClient?.name} (${activeClient?.pan}) has ${activeClientDocs.length} uploaded file(s), with mandatory reconciliation statements still pending (${activeDocBreakdown?.missingMandatoryCategories?.length || 0} required). Additional supporting documents are contextual.`
+                      : `Documents are present for ${activeClient?.name}. Click "Run 3-Way Backend Audit" above or run deterministic extraction in Document Vault to compare Form 16, Form 26AS, and AIS/TIS.`}
                   </p>
                 </div>
               </div>
 
-              {isIncomplete && activeDocBreakdown?.missingCategories?.length > 0 && (
+              {isIncomplete && activeDocBreakdown?.missingMandatoryCategories?.length > 0 && (
                 <div className="bg-white rounded-lg p-3 border border-amber-200">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-2">
-                    Missing Document Categories Required for 3-Way Cross-Audit:
+                    Missing Mandatory Categories for 3-Way Cross-Audit:
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    {activeDocBreakdown.missingCategories.map((cat) => (
+                    {activeDocBreakdown.missingMandatoryCategories.map((cat) => (
                       <div key={cat.category} className="flex items-center gap-2 text-amber-900 bg-amber-50/60 p-2 rounded border border-amber-200">
                         <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                         <span className="font-semibold">{cat.title}</span>
-                        <span className="text-[10px] text-amber-700 ml-auto">Awaiting Upload</span>
+                        <span className="text-[10px] text-amber-700 ml-auto">Mandatory</span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              <div className="pt-1 flex items-center gap-3">
+              <div className="pt-1 flex flex-wrap items-center gap-3">
                 <button
                   onClick={() => navigate('/document-intelligence')}
                   className="px-4 py-2 text-xs font-bold rounded-lg bg-teal-600 hover:bg-teal-700 text-white flex items-center gap-1.5 shadow-xs cursor-pointer"
@@ -435,10 +652,21 @@ export default function TaxReconciliationModule() {
                   <Upload className="w-3.5 h-3.5" />
                   <span>
                     {isIncomplete
-                      ? 'Go to Document Vault to Upload Missing Documents'
-                      : 'Go to Document Vault to Run AI Extraction'}
+                      ? 'Go to Document Vault to Upload Mandatory Documents'
+                      : 'Go to Document Vault to Extract PDFs'}
                   </span>
                 </button>
+                {!isIncomplete && isAuthenticatedBackend && (
+                  <button
+                    type="button"
+                    onClick={handleRunBackendRecon}
+                    disabled={isLoadingReconciliation}
+                    className="px-4 py-2 text-xs font-bold rounded-lg bg-slate-900 hover:bg-slate-800 text-white flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingReconciliation ? 'animate-spin' : ''}`} />
+                    <span>Run 3-Way Backend Reconciliation</span>
+                  </button>
+                )}
               </div>
             </div>
           ) : (
@@ -454,25 +682,26 @@ export default function TaxReconciliationModule() {
                 <div>
                   <h4 className={`text-xs font-bold ${pendingDiscrepancies.length > 0 ? 'text-amber-900' : 'text-emerald-900'}`}>
                     {pendingDiscrepancies.length > 0
-                      ? `${pendingDiscrepancies.length} Cross-Document Discrepancies Detected • Action Required`
+                      ? `${pendingDiscrepancies.length} Cross-Document Discrepancies Detected • CA Review Required`
                       : 'All Cross-Document Items Successfully Reconciled ✓'}
                   </h4>
                   <p className={`text-[11px] mt-0.5 leading-relaxed ${pendingDiscrepancies.length > 0 ? 'text-amber-800' : 'text-emerald-800'}`}>
                     {pendingDiscrepancies.length > 0
-                      ? 'Cross-referencing Form 16, Form 26AS, and AIS identified reporting variances. Accept discrepancies to update tax computations.'
-                      : 'Form 16 salary/professional receipts, TRACES 26AS tax credits, and AIS information codes are verified and fully reconciled.'}
+                      ? 'Review variances across Form 16, Form 26AS, and AIS with source citations and record CA audit resolutions before tax sign-off.'
+                      : `Verified across ${isAuthenticatedBackend ? (backendReconciliation?.dataSource || 'BACKEND_EXTRACTED_DOCS') : 'local preview'} records.`}
                   </p>
                 </div>
               </div>
 
-              {pendingDiscrepancies.length > 0 && (
+              {isAuthenticatedBackend && (
                 <button
-                  onClick={() => {
-                    pendingDiscrepancies.forEach((i) => acceptDiscrepancy(i.id))
-                  }}
-                  className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 shadow-xs cursor-pointer"
+                  type="button"
+                  onClick={handleRunBackendRecon}
+                  disabled={isLoadingReconciliation}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 font-semibold text-xs shrink-0 inline-flex items-center gap-1.5 cursor-pointer"
                 >
-                  Accept All & Recalculate
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingReconciliation ? 'animate-spin' : ''}`} />
+                  <span>Re-Run Audit</span>
                 </button>
               )}
             </div>
@@ -500,46 +729,96 @@ export default function TaxReconciliationModule() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {activeTaxCase?.reconciliationItems?.map((item) => {
-                    const isMismatch = !item.isAccepted && item.status.includes('MISMATCH')
+                  {reconciliationItems.map((item) => {
+                    const isMismatch = !item.isAccepted && !item.isResolved && (item.status?.includes('MISMATCH') || item.matchStatus !== 'MATCHED')
+                    const hasOrigVals = item.originalExtractedValues && Object.keys(item.originalExtractedValues).length > 0
+                    const hasCorrections = Array.isArray(item.caCorrectionsApplied) && item.caCorrectionsApplied.length > 0
                     return (
                       <tr
                         key={item.id}
+                        data-testid={`recon-row-${item.id}`}
                         className={`hover:bg-slate-50/70 transition-colors ${
                           isMismatch ? 'bg-amber-50/30' : ''
                         }`}
                       >
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 align-top">
                           <p className="font-bold text-slate-900">{item.item}</p>
                           <p className="text-[11px] text-slate-500">{item.category}</p>
-                          {item.sourceCitation && (
+                          {item.statutoryRule && (
+                            <p className="text-[10px] text-slate-500 mt-0.5">{item.statutoryRule}</p>
+                          )}
+                          {Array.isArray(item.sourceCitations) && item.sourceCitations.length > 0 ? (
+                            <div className="mt-1 space-y-0.5">
+                              {item.sourceCitations.slice(0, 2).map((c, idx) => (
+                                <p key={idx} className="text-[10px] text-teal-700 font-mono">
+                                  {c.document_name} • Pg {c.page_number}{' '}
+                                  {Array.isArray(c.bounding_box) ? `[${c.bounding_box.join(', ')}]` : ''}
+                                </p>
+                              ))}
+                            </div>
+                          ) : item.sourceCitation ? (
                             <p className="text-[10px] text-teal-700 font-medium mt-0.5">
                               Citation: {item.sourceCitation}
+                            </p>
+                          ) : null}
+                          {hasCorrections && (
+                            <p className="text-[10px] text-blue-700 font-semibold mt-1">
+                              CA Correction Applied ({item.caCorrectionsApplied[0].field_key}): Orig{' '}
+                              {formatINR(item.caCorrectionsApplied[0].original_value)} →{' '}
+                              {formatINR(item.caCorrectionsApplied[0].corrected_value)}
                             </p>
                           )}
                         </td>
 
-                        <td className="py-3 px-3 font-mono font-medium text-slate-800">
-                          {formatINR(item.form16)}
+                        <td className="py-3 px-3 align-top font-mono font-medium text-slate-800">
+                          {item.form16 !== null && item.form16 !== undefined ? formatINR(item.form16) : '—'}
+                          {hasOrigVals &&
+                            item.originalExtractedValues.form_16_original !== null &&
+                            item.originalExtractedValues.form_16_original !== undefined &&
+                            Number(item.originalExtractedValues.form_16_original) !== Number(item.form16) && (
+                              <span className="block text-[10px] text-slate-400">
+                                Orig: {formatINR(item.originalExtractedValues.form_16_original)}
+                              </span>
+                            )}
                         </td>
 
-                        <td className="py-3 px-3 font-mono font-medium text-slate-800">
-                          {formatINR(item.form26AS)}
+                        <td className="py-3 px-3 align-top font-mono font-medium text-slate-800">
+                          {item.form26AS !== null && item.form26AS !== undefined ? formatINR(item.form26AS) : '—'}
+                          {hasOrigVals &&
+                            item.originalExtractedValues.form_26as_original !== null &&
+                            item.originalExtractedValues.form_26as_original !== undefined &&
+                            Number(item.originalExtractedValues.form_26as_original) !== Number(item.form26AS) && (
+                              <span className="block text-[10px] text-slate-400">
+                                Orig: {formatINR(item.originalExtractedValues.form_26as_original)}
+                              </span>
+                            )}
                         </td>
 
-                        <td className="py-3 px-3 font-mono font-bold text-slate-900">
-                          {formatINR(item.aisTis)}
+                        <td className="py-3 px-3 align-top font-mono font-bold text-slate-900">
+                          {item.aisTis !== null && item.aisTis !== undefined ? formatINR(item.aisTis) : '—'}
                         </td>
 
-                        <td className="py-3 px-3">
-                          {item.isAccepted || item.status === 'MATCHED' || item.status === 'MATCHED_RESOLVED' ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Reconciled ✓
-                            </span>
+                        <td className="py-3 px-3 align-top">
+                          {item.isAccepted || item.isResolved || item.status === 'MATCHED' || item.status === 'MATCHED_RESOLVED' ? (
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                {item.resolvedBy ? 'CA Resolved ✓' : 'Reconciled ✓'}
+                              </span>
+                              {item.resolvedValue > 0 && (
+                                <p className="text-[10px] font-mono text-slate-600">
+                                  Validated: {formatINR(item.resolvedValue)}
+                                </p>
+                              )}
+                              {item.resolvedBy && (
+                                <p className="text-[10px] text-slate-500">
+                                  By {item.resolvedBy} • {item.caNotes}
+                                </p>
+                              )}
+                            </div>
                           ) : (
                             <Badge variant={item.riskLevel === 'High' ? 'danger' : 'warning'} size="xs">
-                              {item.riskLevel}: Mismatch
+                              {item.riskLevel}: {item.matchStatus || 'Mismatch'} ({formatINR(item.variance || 0)})
                             </Badge>
                           )}
                           {isMismatch && item.noticeRisk && (
@@ -549,13 +828,21 @@ export default function TaxReconciliationModule() {
                           )}
                         </td>
 
-                        <td className="py-3 px-4 text-right">
-                          {isMismatch ? (
+                        <td className="py-3 px-4 align-top text-right">
+                          {isMismatch || isAuthenticatedBackend ? (
                             <button
-                              onClick={() => acceptDiscrepancy(item.id)}
-                              className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[11px] transition-all shadow-xs cursor-pointer active:scale-98"
+                              type="button"
+                              onClick={() => {
+                                setResolutionError(null)
+                                setResolutionTargetRow(item)
+                              }}
+                              className={`px-3 py-1 rounded-lg font-semibold text-[11px] transition-all cursor-pointer ${
+                                isMismatch
+                                  ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-xs'
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                              }`}
                             >
-                              Accept & Add
+                              {isMismatch ? 'Review & Resolve' : 'Inspect / Override'}
                             </button>
                           ) : (
                             <span className="text-[11px] text-slate-400 font-medium">Verified</span>
@@ -564,13 +851,13 @@ export default function TaxReconciliationModule() {
                       </tr>
                     )
                   })}
-                  {(!activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0) && (
+                  {reconciliationItems.length === 0 && (
                     <tr>
                       <td colSpan={6} className="py-10 text-center text-slate-500">
                         <Clock className="w-8 h-8 text-amber-500 mx-auto mb-2" />
                         <p className="font-bold text-slate-800 text-sm">No Cross-Reconciliation Data Available</p>
                         <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                          Awaiting upload and OCR extraction of required tax documents for {activeClient?.name} ({activeClient?.pan}). Upload missing files in Document Vault to generate comparison matrix.
+                          Awaiting upload and extraction of statutory tax documents for {activeClient?.name} ({activeClient?.pan}). Run extraction in Document Vault or click &ldquo;Run 3-Way Backend Audit&rdquo;.
                         </p>
                       </td>
                     </tr>
@@ -581,10 +868,10 @@ export default function TaxReconciliationModule() {
           </div>
 
           {/* Action Explanations Cards - Dynamically derived from active client reconciliation items */}
-          {!isIncomplete && activeTaxCase?.reconciliationItems?.some((i) => i.status.includes('MISMATCH')) && (
+          {!isIncomplete && reconciliationItems.some((i) => !i.isResolved || i.status?.includes('MISMATCH')) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {activeTaxCase.reconciliationItems
-                .filter((i) => i.status.includes('MISMATCH'))
+              {reconciliationItems
+                .filter((i) => !i.isResolved || i.status?.includes('MISMATCH'))
                 .map((item, idx) => (
                   <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
                     <div className="flex items-center gap-2 mb-2">
@@ -636,30 +923,66 @@ export default function TaxReconciliationModule() {
             </div>
           ) : (
             <>
-              {/* Smart Recommendation Banner */}
+              {/* Smart Recommendation & Backend Validation Banner */}
           <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-start gap-3.5">
               <div className="p-2.5 rounded-xl bg-emerald-600 text-white shrink-0 shadow-xs">
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
-                  Sample Mathematical Optimizer (Prototype Calculation)
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                    {isAuthenticatedBackend
+                      ? `Backend Deterministic Engine (${taxComparison.dataSource || 'VALIDATED_BACKEND_DOCUMENTS'})`
+                      : 'Unauthenticated Preview Calculation'}
+                  </span>
+                  {isAuthenticatedBackend && taxComparison.validationStatus && (
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                        taxComparison.validationStatus === 'READY'
+                          ? 'bg-white text-emerald-800 border-emerald-300'
+                          : 'bg-amber-100 text-amber-900 border-amber-300'
+                      }`}
+                    >
+                      Gate: {taxComparison.validationStatus}
+                    </span>
+                  )}
+                </div>
                 <h3 className="text-base font-bold text-emerald-950 mt-1">
                   {taxComparison.recommendationReason}
                 </h3>
                 <p className="text-xs text-emerald-800 mt-0.5">
-                  Illustrative rule-based calculation conforming to Finance Act 2024. For prototype demonstration only; not formal tax advice.
+                  {isAuthenticatedBackend
+                    ? `Derived from ${taxComparison.validationGate?.core_parsed_docs || 0} parsed document(s), ${taxComparison.validationGate?.applied_corrections_count || 0} CA field override(s), and resolved reconciliation credits (TDS Credit: ${formatINR(taxComparison.tdsPaid || 0)}).`
+                    : 'Offline preview calculation conforming to Finance Act 2024.'}
                 </p>
               </div>
             </div>
 
-            <div className="text-right shrink-0 bg-white px-4 py-2.5 rounded-lg border border-emerald-200 shadow-xs">
-              <span className="text-[10px] uppercase font-semibold text-slate-400 block">Net Tax Saved</span>
-              <span className="text-xl font-bold text-emerald-600">
-                {formatINR(taxComparison.taxSaved)}
-              </span>
+            <div className="flex items-center gap-3 shrink-0">
+              {isAuthenticatedBackend && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    computeClientTax(
+                      activeClient.id,
+                      resolvedCaseId,
+                      String(activeAy || '2025-26').replace(/^AY\s*/i, '')
+                    )
+                  }
+                  disabled={isComputingTax}
+                  className="px-3 py-2 rounded-lg bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-900 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isComputingTax ? 'animate-spin' : ''}`} />
+                  <span>{isComputingTax ? 'Recalculating...' : 'Recompute'}</span>
+                </button>
+              )}
+              <div className="text-right bg-white px-4 py-2.5 rounded-lg border border-emerald-200 shadow-xs">
+                <span className="text-[10px] uppercase font-semibold text-slate-400 block">Net Tax Saved</span>
+                <span className="text-xl font-bold text-emerald-600">
+                  {formatINR(taxComparison.taxSaved)}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -886,27 +1209,27 @@ export default function TaxReconciliationModule() {
 
               <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  {!isIncomplete && activeTaxCase?.checklist?.form16Reconciled ? (
+                  {!isIncomplete && hasValidatedBackendDocs ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   ) : (
                     <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
                   )}
                   <span className="font-medium text-slate-800">
-                    Sample TDS Credits cross-referenced with TRACES Form 26AS ledger
+                    Validated TDS & Income Data Extracted from Backend PDFs
                   </span>
                 </div>
                 <span
                   className={`font-bold text-[11px] ${
-                    !isIncomplete && activeTaxCase?.checklist?.form16Reconciled ? 'text-emerald-700' : 'text-amber-700'
+                    !isIncomplete && hasValidatedBackendDocs ? 'text-emerald-700' : 'text-amber-700'
                   }`}
                 >
-                  {!isIncomplete && activeTaxCase?.checklist?.form16Reconciled ? 'PASSED ✓' : 'AWAITING INGESTION'}
+                  {!isIncomplete && hasValidatedBackendDocs ? 'PASSED ✓' : 'AWAITING INGESTION'}
                 </span>
               </div>
 
               <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  {pendingDiscrepancies.length === 0 && !isIncomplete && activeTaxCase?.reconciliationItems?.length > 0 ? (
+                  {pendingDiscrepancies.length === 0 && !isIncomplete && reconciliationItems.length > 0 ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   ) : (
                     <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
@@ -917,12 +1240,12 @@ export default function TaxReconciliationModule() {
                 </div>
                 <span
                   className={`font-bold text-[11px] ${
-                    pendingDiscrepancies.length === 0 && !isIncomplete && activeTaxCase?.reconciliationItems?.length > 0 ? 'text-emerald-700' : 'text-amber-700'
+                    pendingDiscrepancies.length === 0 && !isIncomplete && reconciliationItems.length > 0 ? 'text-emerald-700' : 'text-amber-700'
                   }`}
                 >
                   {isIncomplete
                     ? 'AWAITING DOCUMENTS'
-                    : !activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0
+                    : reconciliationItems.length === 0
                     ? 'AWAITING RECONCILIATION'
                     : pendingDiscrepancies.length === 0
                     ? 'RESOLVED ✓'
@@ -937,15 +1260,17 @@ export default function TaxReconciliationModule() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
-                  Simulated CA Sign-Off Gateway (Prototype Action)
+                  {isAuthenticatedBackend
+                    ? 'CA Sign-Off Audit Gateway (Backend Persisted)'
+                    : 'Unauthenticated Preview Sign-Off'}
                 </span>
                 <h3 className="text-lg font-bold text-white mt-1">
-                  Simulated Chartered Accountant Review & Approval
+                  Chartered Accountant Review & Approval
                 </h3>
                 <p className="text-xs text-slate-300 mt-1 max-w-xl leading-relaxed">
-                  Under the Income Tax Act, real e-filing requires a valid digital signature certificate (DSC) or Aadhaar OTP. This is an illustrative prototype action demonstrating CA oversight.
+                  Statutory approval is gated until mandatory documents are parsed, validated, and all reconciliation discrepancies are resolved with CA audit notes.
                 </p>
-                {!activeTaxCase?.approval?.isApproved && (
+                {!isCaseApproved && (
                   <div className="mt-3">
                     <label className="block text-[11px] font-semibold text-slate-300 mb-1">
                       CA Sign-Off Certification Notes:
@@ -954,12 +1279,12 @@ export default function TaxReconciliationModule() {
                       rows={2}
                       value={caApprovalNotes}
                       onChange={(e) => setCaApprovalNotes(e.target.value)}
-                      disabled={isIncomplete || pendingDiscrepancies.length > 0 || !activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0}
+                      disabled={isIncomplete || pendingDiscrepancies.length > 0 || reconciliationItems.length === 0}
                       className="w-full bg-slate-950/70 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-hidden focus:border-blue-500 placeholder:text-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder={
                         isIncomplete
-                          ? "Intake incomplete — formal verification notes cannot be generated until required documents are uploaded and reconciled."
-                          : !activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0
+                          ? "Intake incomplete — formal verification notes cannot be generated until mandatory documents are uploaded and reconciled."
+                          : reconciliationItems.length === 0
                           ? "Reconciliation pending — run 3-way audit before recording sign-off certification notes."
                           : pendingDiscrepancies.length > 0
                           ? `Discrepancies pending — resolve ${pendingDiscrepancies.length} reporting variances before sign-off certification.`
@@ -981,16 +1306,16 @@ export default function TaxReconciliationModule() {
                 <button
                   onClick={handleApproveCase}
                   disabled={
+                    isSigningOff ||
                     isIncomplete ||
                     pendingDiscrepancies.length > 0 ||
-                    activeTaxCase?.approval?.isApproved ||
-                    !activeTaxCase?.reconciliationItems ||
-                    activeTaxCase.reconciliationItems.length === 0
+                    isCaseApproved ||
+                    reconciliationItems.length === 0
                   }
                   className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all shadow-md flex items-center gap-1.5 active:scale-98 ${
-                    activeTaxCase?.approval?.isApproved
+                    isCaseApproved
                       ? 'bg-emerald-600 text-white cursor-default'
-                      : isIncomplete || !activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0
+                      : isIncomplete || reconciliationItems.length === 0
                       ? 'bg-slate-700 text-slate-400 cursor-not-allowed border border-slate-600'
                       : pendingDiscrepancies.length > 0
                       ? 'bg-amber-600/80 text-white cursor-not-allowed'
@@ -999,35 +1324,39 @@ export default function TaxReconciliationModule() {
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>
-                    {activeTaxCase?.approval?.isApproved
-                      ? 'Approved by CA (Simulated Prototype Action) ✓'
+                    {isSigningOff
+                      ? 'Recording Approval...'
+                      : isCaseApproved
+                      ? 'Approved by CA ✓'
                       : isIncomplete
-                      ? 'Intake Incomplete — Upload Missing Documents First'
-                      : !activeTaxCase?.reconciliationItems || activeTaxCase.reconciliationItems.length === 0
+                      ? 'Intake Incomplete — Upload Mandatory Documents First'
+                      : reconciliationItems.length === 0
                       ? 'Reconciliation Pending — Complete 3-Way Audit First'
                       : pendingDiscrepancies.length > 0
                       ? `Resolve ${pendingDiscrepancies.length} Discrepancies Before Sign-Off`
-                      : 'Simulate Sign-Off & Generate Filing Pack'}
+                      : isAuthenticatedBackend
+                      ? 'Approve & Record CA Sign-Off'
+                      : 'Simulate Sign-Off (Offline Preview)'}
                   </span>
                 </button>
               </div>
             </div>
 
             {/* Approval Metadata Display */}
-            {activeTaxCase?.approval?.isApproved && (
+            {approvalDetails?.isApproved && (
               <div className="mt-4 pt-4 border-t border-slate-700/80 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                 <div>
                   <span className="text-slate-400 text-[10px] uppercase font-semibold">Approved By:</span>
-                  <p className="text-teal-300 font-semibold">{activeTaxCase.approval.approvedBy}</p>
+                  <p className="text-teal-300 font-semibold">{approvalDetails.approvedBy}</p>
                 </div>
                 <div>
                   <span className="text-slate-400 text-[10px] uppercase font-semibold">Timestamp:</span>
-                  <p className="text-slate-200">{formatDate(activeTaxCase.approval.approvedAt, true)}</p>
+                  <p className="text-slate-200">{formatDate(approvalDetails.approvedAt, true)}</p>
                 </div>
                 <div>
-                  <span className="text-slate-400 text-[10px] uppercase font-semibold">Demonstration Identifier (Not a Legal DSC Signature):</span>
+                  <span className="text-slate-400 text-[10px] uppercase font-semibold">Verification Hash:</span>
                   <p className="font-mono text-slate-300 text-[11px] truncate">
-                    {activeTaxCase.approval.sha256Hash}
+                    {approvalDetails.sha256Hash}
                   </p>
                 </div>
               </div>
@@ -1146,6 +1475,19 @@ export default function TaxReconciliationModule() {
           </div>
         </form>
       </Modal>
+
+      <DiscrepancyResolutionModal
+        row={resolutionTargetRow}
+        onClose={() => setResolutionTargetRow(null)}
+        onSubmit={handleSubmitRowResolution}
+        isSubmitting={isResolvingRow}
+        serverError={resolutionError}
+      />
+
+      <BackendAuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+      />
     </div>
   )
 }

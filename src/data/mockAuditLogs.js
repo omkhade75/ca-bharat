@@ -20,7 +20,7 @@ export const INITIAL_AUDIT_LOGS = [
     action: 'SIMULATED_PROCESSING',
     clientName: 'Arun Kumar Verma',
     pan: 'ABCPA1092F',
-    details: 'Simulated in-memory extraction executed in ephemeral RAM sandbox. Bounding citations generated with 99.2% confidence.',
+    details: 'Deterministic PDF extraction executed in vault workspace with page & bounding-box coordinate citations.',
     ipAddress: '127.0.0.1 (Sandbox)',
     category: 'Security Concept',
   },

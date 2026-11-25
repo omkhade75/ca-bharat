@@ -23,6 +23,14 @@ import {
   INDIVIDUAL_OCCUPATION_PROFILES,
 } from '../data/statutoryTaxpayerTypes'
 import { DEFAULT_INTAKE_DISCOVERY, generateDynamicChecklist } from '../data/intakeSchema'
+import apiClient, { ApiError } from '../services/apiClient'
+import {
+  mapBackendDocumentToUi,
+  mapBackendReconciliationToUi,
+  mapBackendTaxComparisonToUi,
+  mergeBackendClientsAndCases,
+  resolveBackendCaseId,
+} from '../utils/documentMapper'
 
 const AppContext = createContext(null)
 
@@ -51,6 +59,16 @@ export function AppProvider({ children }) {
   const [activeClientId, setActiveClientId] = useState(() => loadFromStorage(STORAGE_KEYS.ACTIVE_CLIENT_ID, ''))
   const [globalSearch, setGlobalSearch] = useState('')
   const [isSimulatingExtraction, setIsSimulatingExtraction] = useState(false)
+  const [authSession, setAuthSession] = useState(() => apiClient.getSession())
+  const [authError, setAuthError] = useState(null)
+  const [isSyncingBackend, setIsSyncingBackend] = useState(false)
+  const [extractionError, setExtractionError] = useState(null)
+  const [backendReconciliation, setBackendReconciliation] = useState(null)
+  const [backendTaxComparison, setBackendTaxComparison] = useState(null)
+  const [isLoadingReconciliation, setIsLoadingReconciliation] = useState(false)
+  const [reconciliationError, setReconciliationError] = useState(null)
+  const [isComputingTax, setIsComputingTax] = useState(false)
+  const [taxError, setTaxError] = useState(null)
 
   // Sync to storage on updates
   useEffect(() => { saveToStorage(STORAGE_KEYS.CLIENTS, clients) }, [clients])
@@ -99,12 +117,14 @@ export function AppProvider({ children }) {
     const newLog = {
       id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       timestamp: new Date().toISOString(),
-      actor: 'CA Rajesh Sharma (Demo Partner)',
+      actor: authSession?.actor_name
+        ? `${authSession.actor_name} (${authSession.role})`
+        : 'CA Rajesh Sharma (Demo Partner)',
       action,
       clientName: clientName || 'System',
       pan: pan || '—',
       details,
-      ipAddress: '103.22.140.12 (Simulated Token)',
+      ipAddress: authSession?.access_token ? 'Authenticated Session Token' : 'Local Prototype Session',
       category,
     }
     setAuditLogs((prev) => [newLog, ...prev])
@@ -434,32 +454,46 @@ export function AppProvider({ children }) {
   }
 
   const addDocument = (docData) => {
-    const targetChecklistIds = (docData.checklistItemIds && docData.checklistItemIds.length > 0)
-      ? docData.checklistItemIds
-      : mapCategoryToChecklistIds(docData.category)
+    const normalizedBackendDoc =
+      docData && (docData.extracted_data || docData.extraction_engine || docData.client_id)
+        ? mapBackendDocumentToUi(docData)
+        : null
+
+    const baseData = normalizedBackendDoc || docData
+    const targetChecklistIds =
+      baseData.checklistItemIds && baseData.checklistItemIds.length > 0
+        ? baseData.checklistItemIds
+        : mapCategoryToChecklistIds(baseData.category)
 
     const newDoc = {
-      id: docData.id || `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      clientId: docData.clientId || activeClientId,
-      clientPan: docData.clientPan || activeClient?.pan,
-      caseId: docData.caseId || activeTaxCase?.caseId || activeTaxCase?.id,
-      assessmentYear: docData.assessmentYear || activeTaxCase?.assessmentYear || activeAy,
-      name: docData.name || docData.filename,
-      category: docData.category,
+      id: baseData.id || `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      clientId: baseData.clientId || activeClientId,
+      clientPan: baseData.clientPan || activeClient?.pan,
+      caseId: baseData.caseId || activeTaxCase?.caseId || activeTaxCase?.id,
+      assessmentYear: baseData.assessmentYear || activeTaxCase?.assessmentYear || activeAy,
+      name: baseData.name || baseData.filename,
+      category: baseData.category,
       checklistItemIds: targetChecklistIds,
-      fileSizeBytes: docData.fileSizeBytes || docData.file_size_bytes || 0,
-      fileHashSha256: docData.fileHashSha256 || docData.file_hash_sha256 || null,
-      processingStatus: docData.processingStatus || docData.processing_status || 'PARSED',
-      caReviewStatus: docData.caReviewStatus || docData.ca_review_status || 'PENDING_REVIEW',
-      reviewNotes: docData.reviewNotes || null,
-      waiveReason: docData.waiveReason || null,
-      uploadDate: new Date().toISOString(),
-      status: 'Uploaded',
-      encryptionStatus: `Secured Private Storage (SHA-256)`,
-      extractionConfidence: 99.2,
-      isCompletePartB: true,
-      boundingCitations: docData.citations || [],
-      ...docData,
+      fileSizeBytes: baseData.fileSizeBytes || 0,
+      fileHashSha256: baseData.fileHashSha256 || null,
+      processingStatus: baseData.processingStatus || 'UPLOADED',
+      caReviewStatus: baseData.caReviewStatus || 'PENDING_REVIEW',
+      reviewNotes: baseData.reviewNotes || null,
+      waiveReason: baseData.waiveReason || null,
+      uploadDate: baseData.uploadDate || new Date().toISOString(),
+      status: baseData.status || 'Uploaded',
+      encryptionStatus: 'Secured Private Storage (SHA-256)',
+      extractionSupported: Boolean(baseData.extractionSupported),
+      extractionEngine:
+        baseData.extractionEngine ||
+        (baseData.extractionSupported ? 'DETERMINISTIC_PDF' : 'UNSUPPORTED_TYPE'),
+      evidenceScore: baseData.evidenceScore ?? null,
+      evidenceMethodology: baseData.evidenceMethodology || null,
+      extractedData: baseData.extractedData || {},
+      citations: baseData.citations || [],
+      boundingCitations: baseData.boundingCitations || baseData.citations || [],
+      correctedFields: baseData.correctedFields || {},
+      ...baseData,
     }
 
     setDocuments((prev) => [newDoc, ...prev])
@@ -467,7 +501,7 @@ export function AppProvider({ children }) {
     // Update client uploaded count & dynamic checklist
     setClients((prev) =>
       prev.map((c) => {
-        if (c.id !== (docData.clientId || activeClientId)) return c
+        if (c.id !== (newDoc.clientId || activeClientId)) return c
         const updatedChecklist = (c.dynamicChecklist || []).map((item) => {
           if (targetChecklistIds.includes(item.id) && item.status !== 'WAIVED') {
             return { ...item, status: 'RECEIVED' }
@@ -488,8 +522,9 @@ export function AppProvider({ children }) {
 
     setTaxCases((prev) =>
       prev.map((tc) => {
-        if (tc.clientId !== (docData.clientId || activeClientId)) return tc
-        const existingDocsCount = documents.filter((d) => d.clientId === (docData.clientId || activeClientId)).length + 1
+        if (tc.clientId !== (newDoc.clientId || activeClientId)) return tc
+        const existingDocsCount =
+          documents.filter((d) => d.clientId === (newDoc.clientId || activeClientId)).length + 1
         const required = activeClient?.docsRequired || 4
         return {
           ...tc,
@@ -508,10 +543,24 @@ export function AppProvider({ children }) {
     return newDoc
   }
 
-  const updateDocumentReviewStatus = (docId, newStatus, reviewNotes = '', waiveReason = '') => {
+  const updateDocumentReviewStatus = async (docId, newStatus, reviewNotes = '', waiveReason = '') => {
+    const targetDoc = documents.find((d) => d.id === docId)
+    let mappedUpdated = null
+
+    if (apiClient.getAccessToken() && targetDoc?.isBackendSynced) {
+      const updatedRaw = await apiClient.updateDocumentStatus(
+        docId,
+        newStatus,
+        reviewNotes || null,
+        waiveReason || null
+      )
+      mappedUpdated = mapBackendDocumentToUi(updatedRaw)
+    }
+
     setDocuments((prev) =>
       prev.map((d) => {
         if (d.id !== docId) return d
+        if (mappedUpdated) return mappedUpdated
         return {
           ...d,
           caReviewStatus: newStatus,
@@ -521,8 +570,6 @@ export function AppProvider({ children }) {
       })
     )
 
-    // Update corresponding checklist items if applicable
-    const targetDoc = documents.find((d) => d.id === docId)
     if (targetDoc && targetDoc.checklistItemIds) {
       setClients((prev) =>
         prev.map((c) => {
@@ -549,10 +596,14 @@ export function AppProvider({ children }) {
       activeClient?.pan,
       'Document'
     )
+    return mappedUpdated
   }
 
-  const deleteDocument = (docId) => {
+  const deleteDocument = async (docId) => {
     const docToDelete = documents.find((d) => d.id === docId)
+    if (apiClient.getAccessToken() && docToDelete?.isBackendSynced) {
+      await apiClient.deleteDocument(docId)
+    }
     setDocuments((prev) => prev.filter((d) => d.id !== docId))
     if (docToDelete) {
       setClients((prev) =>
@@ -578,6 +629,42 @@ export function AppProvider({ children }) {
     const targetClient = clients.find((c) => c.id === clientId) || activeClient
     if (!targetClient) return null
 
+    const matchingCase =
+      taxCases.find((tc) => tc.clientId === targetClient.id) || activeTaxCase
+    const resolvedCaseId =
+      matchingCase?.caseId ||
+      matchingCase?.id ||
+      resolveBackendCaseId(targetClient.id, targetClient.activeAY || activeAy)
+
+    let notice = null
+    try {
+      if (!apiClient.getAccessToken()) {
+        throw new ApiError(0, 'Unauthenticated preview fallback')
+      }
+      notice = await apiClient.requestMissingDocuments({
+        clientId: targetClient.id,
+        caseId: resolvedCaseId,
+        checklistItemIds: missingItemIds,
+        customNotes,
+      })
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        throw err
+      }
+      notice = {
+        recipient_name: targetClient.name,
+        recipient_email: targetClient.email || 'client@example.com',
+        recipient_mobile: targetClient.mobile || '+91 98000 00000',
+        subject: `Document Request: Pending ITR Filing for ${activeAy}`,
+        email_body: `Dear ${targetClient.name},\n\nPlease provide your pending tax documents:\n${missingItemIds.join('\n')}\n\nWarm regards,\nCA Bharat AI`,
+        whatsapp_body: `Hello ${targetClient.name}, please upload your pending tax documents to complete your return filing.`,
+        missing_items: missingItemIds.map((id) => ({ id, title: id.replace('-', ' ').toUpperCase() })),
+        is_simulated_dispatch: true,
+        notice_disclaimer: 'Draft outreach preview only. No external SMS/email transmission performed.',
+        generated_at: new Date().toISOString(),
+      }
+    }
+
     // Update checklist item statuses to 'REQUESTED'
     setClients((prev) =>
       prev.map((c) => {
@@ -591,30 +678,6 @@ export function AppProvider({ children }) {
         return { ...c, dynamicChecklist: updatedChecklist }
       })
     )
-
-    let notice = null
-    try {
-      notice = await apiClient.requestMissingDocuments({
-        clientPan: targetClient.pan,
-        caseId: activeTaxCase?.caseId || activeTaxCase?.id,
-        checklistItemIds: missingItemIds,
-        customNotes,
-      })
-    } catch (err) {
-      console.warn('Backend missing docs notice generation fallback:', err)
-      notice = {
-        recipient_name: targetClient.name,
-        recipient_email: targetClient.email || 'client@example.com',
-        recipient_mobile: targetClient.mobile || '+91 98000 00000',
-        subject: `Document Request: Pending ITR Filing for ${activeAy} - ${targetClient.pan}`,
-        email_body: `Dear ${targetClient.name},\n\nPlease provide your pending tax documents:\n${missingItemIds.join('\n')}\n\nWarm regards,\nCA Bharat AI`,
-        whatsapp_body: `Hello ${targetClient.name}, please upload your pending tax documents to complete your return filing.`,
-        missing_items: missingItemIds.map((id) => ({ id, title: id.replace('-', ' ').toUpperCase() })),
-        is_simulated_dispatch: true,
-        notice_disclaimer: 'Draft outreach preview only. No external SMS/email transmission performed.',
-        generated_at: new Date().toISOString(),
-      }
-    }
 
     addAuditLog(
       'MISSING_DOCS_REQUESTED',
@@ -892,6 +955,440 @@ export function AppProvider({ children }) {
   }
 
   // Record Report Generated
+  // Step 06 Backend Auth & Synchronisation
+  const clearAuthError = () => setAuthError(null)
+  const clearExtractionError = () => setExtractionError(null)
+  const clearReconciliationError = () => setReconciliationError(null)
+
+  useEffect(() => {
+    const unsubscribe = apiClient.onAuthError((err) => {
+      if (err?.status === 401) {
+        setAuthSession(null)
+        setBackendReconciliation(null)
+        setBackendTaxComparison(null)
+      }
+      setAuthError(err?.message || 'Backend authorization error.')
+    })
+    return unsubscribe
+  }, [])
+
+  const fetchClientReconciliationAndTax = async (clientId, caseId = null) => {
+    if (!clientId || !apiClient.getAccessToken()) return null
+    setIsLoadingReconciliation(true)
+    setReconciliationError(null)
+    setTaxError(null)
+    try {
+      const [rawMatrix, rawTax] = await Promise.all([
+        apiClient.getBackendReconciliation(clientId, caseId).catch((err) => {
+          if (err?.status !== 404) setReconciliationError(err?.message || 'Unable to load reconciliation.')
+          return null
+        }),
+        apiClient.getBackendTaxCalculation(clientId, caseId).catch((err) => {
+          if (err?.status !== 404) setTaxError(err?.message || 'Unable to load tax calculation.')
+          return null
+        }),
+      ])
+      const mappedMatrix = rawMatrix ? mapBackendReconciliationToUi(rawMatrix) : null
+      const mappedTax = rawTax ? mapBackendTaxComparisonToUi(rawTax) : null
+      setBackendReconciliation(mappedMatrix)
+      setBackendTaxComparison(mappedTax)
+      return { matrix: mappedMatrix, tax: mappedTax }
+    } finally {
+      setIsLoadingReconciliation(false)
+    }
+  }
+
+  const fetchClientDocumentsFromBackend = async (clientId, caseId = null) => {
+    if (!clientId || !apiClient.getAccessToken()) return []
+    const rawDocs = await apiClient.getDocumentsByClient(clientId, caseId)
+    const mapped = (Array.isArray(rawDocs) ? rawDocs : []).map(mapBackendDocumentToUi)
+    setDocuments((prev) => [
+      ...prev.filter((d) => d.clientId !== clientId),
+      ...mapped,
+    ])
+    return mapped
+  }
+
+  const syncBackendWorkspace = async (sessionOverride = null) => {
+    const activeToken = sessionOverride?.access_token || apiClient.getAccessToken()
+    if (!activeToken) return null
+    setIsSyncingBackend(true)
+    setAuthError(null)
+    try {
+      const backendClients = await apiClient.getClients()
+      if (!Array.isArray(backendClients)) return null
+
+      const { mergedClients, mergedTaxCases, idRemap } = mergeBackendClientsAndCases({
+        backendClients,
+        localClients: clients,
+        localTaxCases: taxCases,
+        defaultIntakeDiscovery: DEFAULT_INTAKE_DISCOVERY,
+        generateChecklist: generateDynamicChecklist,
+        computeItr: computeRecommendedItr,
+      })
+
+      setClients(mergedClients)
+      setTaxCases(mergedTaxCases)
+
+      if (Object.keys(idRemap).length > 0) {
+        setDocuments((prev) =>
+          prev.map((d) => (idRemap[d.clientId] ? { ...d, clientId: idRemap[d.clientId] } : d))
+        )
+      }
+
+      let resolvedActiveId = idRemap[activeClientId] || activeClientId
+      if (!mergedClients.some((c) => c.id === resolvedActiveId)) {
+        resolvedActiveId = backendClients[0]?.id || mergedClients[0]?.id || ''
+      }
+      if (resolvedActiveId && resolvedActiveId !== activeClientId) {
+        setActiveClientId(resolvedActiveId)
+      }
+
+      if (resolvedActiveId) {
+        const matchedClient = mergedClients.find((c) => c.id === resolvedActiveId)
+        const matchedCase = mergedTaxCases.find((tc) => tc.clientId === resolvedActiveId)
+        const caseId = matchedCase?.caseId || resolveBackendCaseId(resolvedActiveId, matchedClient?.activeAY)
+        await fetchClientDocumentsFromBackend(resolvedActiveId, caseId)
+        await fetchClientReconciliationAndTax(resolvedActiveId, caseId)
+      }
+      return backendClients
+    } catch (err) {
+      if (!(err instanceof ApiError)) {
+        setAuthError(err?.message || 'Failed to sync workspace from backend.')
+      }
+      throw err
+    } finally {
+      setIsSyncingBackend(false)
+    }
+  }
+
+  useEffect(() => {
+    if (authSession?.access_token) {
+      syncBackendWorkspace(authSession).catch(() => {
+        // Error surfaced cleanly through authError / onAuthError
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authSession?.access_token])
+
+  useEffect(() => {
+    if (!authSession?.access_token || !activeClientId) return
+    const matchedCase = taxCases.find((tc) => tc.clientId === activeClientId)
+    const caseId =
+      matchedCase?.caseId ||
+      resolveBackendCaseId(activeClientId, activeClient?.activeAY || activeAy)
+    fetchClientDocumentsFromBackend(activeClientId, caseId).catch((err) => {
+      setExtractionError(err?.message || 'Unable to load documents from backend.')
+    })
+    fetchClientReconciliationAndTax(activeClientId, caseId).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClientId])
+
+  const signInBackendSession = async ({ username, credential }) => {
+    setAuthError(null)
+    const session = await apiClient.authenticateSession({ username, credential })
+    setAuthSession(session)
+    addAuditLog(
+      'BACKEND_SESSION_AUTHENTICATED',
+      `Authenticated backend session for ${session.actor_name} (${session.role}).`,
+      activeClient?.name,
+      activeClient?.pan,
+      'Security'
+    )
+    await syncBackendWorkspace(session)
+    return session
+  }
+
+  const connectWithBearerToken = async (rawToken) => {
+    setAuthError(null)
+    const trimmed = (rawToken || '').trim()
+    if (!trimmed) {
+      throw new ApiError(400, 'Please provide a valid Bearer token.')
+    }
+    const candidateSession = {
+      access_token: trimmed,
+      token_type: 'bearer',
+      actor_id: 'external-token-session',
+      actor_name: 'Bearer Token Session',
+      role: 'SERVER_ENFORCED',
+      assigned_client_ids: [],
+      allowed_case_ids: [],
+      is_prototype_auth: false,
+    }
+    apiClient.setSession(candidateSession)
+    try {
+      setAuthSession(candidateSession)
+      await syncBackendWorkspace(candidateSession)
+      return candidateSession
+    } catch (err) {
+      apiClient.clearSession()
+      setAuthSession(null)
+      throw err
+    }
+  }
+
+  const signOutBackendSession = () => {
+    apiClient.clearSession()
+    setAuthSession(null)
+    setAuthError(null)
+    setExtractionError(null)
+    setBackendReconciliation(null)
+    setBackendTaxComparison(null)
+    setReconciliationError(null)
+    setTaxError(null)
+  }
+
+  const runClientReconciliation = async (
+    clientId = activeClientId,
+    caseId = activeTaxCase?.caseId || resolveBackendCaseId(activeClientId, activeAy),
+    assessmentYear = String(activeAy || '2025-26').replace(/^AY\s*/i, '')
+  ) => {
+    setIsLoadingReconciliation(true)
+    setReconciliationError(null)
+    try {
+      const rawMatrix = await apiClient.runBackendReconciliation(clientId, {
+        caseId,
+        assessmentYear,
+      })
+      const mappedMatrix = mapBackendReconciliationToUi(rawMatrix)
+      setBackendReconciliation(mappedMatrix)
+      const rawTax = await apiClient
+        .runBackendTaxCalculation(clientId, { caseId, assessmentYear })
+        .catch(() => null)
+      if (rawTax) setBackendTaxComparison(mapBackendTaxComparisonToUi(rawTax))
+      addAuditLog(
+        '3WAY_RECONCILIATION_EXECUTED',
+        `Executed backend 3-way reconciliation for ${clientId}: ${mappedMatrix.totalDiscrepancies} discrepancy(ies).`,
+        activeClient?.name,
+        activeClient?.pan,
+        'Reconciliation'
+      )
+      return mappedMatrix
+    } catch (err) {
+      setReconciliationError(err?.message || 'Reconciliation failed.')
+      throw err
+    } finally {
+      setIsLoadingReconciliation(false)
+    }
+  }
+
+  const resolveReconciliationIssue = async (
+    clientId,
+    rowId,
+    {
+      action,
+      caNotes,
+      resolvedValue = null,
+      caseId = activeTaxCase?.caseId || resolveBackendCaseId(activeClientId, activeAy),
+    }
+  ) => {
+    setReconciliationError(null)
+    try {
+      const rawMatrix = await apiClient.resolveBackendReconciliationRow(clientId, rowId, {
+        action,
+        caNotes,
+        resolvedValue,
+        caseId,
+      })
+      const mappedMatrix = mapBackendReconciliationToUi(rawMatrix)
+      setBackendReconciliation(mappedMatrix)
+      const ayClean = String(activeAy || '2025-26').replace(/^AY\s*/i, '')
+      const rawTax = await apiClient
+        .runBackendTaxCalculation(clientId, { caseId, assessmentYear: ayClean })
+        .catch(() => null)
+      if (rawTax) setBackendTaxComparison(mapBackendTaxComparisonToUi(rawTax))
+      addAuditLog(
+        'DISCREPANCY_RESOLVED',
+        `Resolved reconciliation row ${rowId} (${action}). Notes: ${caNotes}`,
+        activeClient?.name,
+        activeClient?.pan,
+        'Reconciliation'
+      )
+      return mappedMatrix
+    } catch (err) {
+      setReconciliationError(err?.message || 'Failed to resolve reconciliation item.')
+      throw err
+    }
+  }
+
+  const computeClientTax = async (
+    clientId = activeClientId,
+    caseId = activeTaxCase?.caseId || resolveBackendCaseId(activeClientId, activeAy),
+    assessmentYear = String(activeAy || '2025-26').replace(/^AY\s*/i, '')
+  ) => {
+    setIsComputingTax(true)
+    setTaxError(null)
+    try {
+      const rawTax = await apiClient.runBackendTaxCalculation(clientId, {
+        caseId,
+        assessmentYear,
+      })
+      const mapped = mapBackendTaxComparisonToUi(rawTax)
+      setBackendTaxComparison(mapped)
+      return mapped
+    } catch (err) {
+      setTaxError(err?.message || 'Tax computation failed.')
+      throw err
+    } finally {
+      setIsComputingTax(false)
+    }
+  }
+
+  const approveClientTaxBackend = async (
+    clientId = activeClientId,
+    {
+      caseId = activeTaxCase?.caseId || resolveBackendCaseId(activeClientId, activeAy),
+      caNotes,
+      chosenRegime = 'NEW_REGIME_115BAC',
+    }
+  ) => {
+    setTaxError(null)
+    const res = await apiClient.submitBackendCaSignOff(clientId, {
+      caseId,
+      caNotes,
+      chosenRegime,
+    })
+    await fetchClientReconciliationAndTax(clientId, caseId)
+    addAuditLog(
+      'CA_STATUTORY_SIGN_OFF',
+      `Approved ITR return under ${chosenRegime}. Verification hash: ${res.verification_hash}`,
+      activeClient?.name,
+      activeClient?.pan,
+      'CA Sign-Off'
+    )
+    return res
+  }
+
+  const extractClientDocuments = async (
+    clientId = activeClientId,
+    caseId = activeTaxCase?.caseId || resolveBackendCaseId(activeClientId, activeAy)
+  ) => {
+    setExtractionError(null)
+    setIsSimulatingExtraction(true)
+    try {
+      const extractedRawDocs = await apiClient.extractAllDocuments({
+        clientId,
+        caseId,
+      })
+      const mapped = (Array.isArray(extractedRawDocs) ? extractedRawDocs : []).map(
+        mapBackendDocumentToUi
+      )
+      setDocuments((prev) => [
+        ...prev.filter((d) => d.clientId !== clientId),
+        ...mapped,
+      ])
+      addAuditLog(
+        'BACKEND_EXTRACTION_EXECUTED',
+        `Executed deterministic PDF extraction for ${mapped.length} document(s) in client ${clientId}.`,
+        activeClient?.name,
+        activeClient?.pan,
+        'Extraction'
+      )
+      const ayClean = String(activeAy || '2025-26').replace(/^AY\s*/i, '')
+      await runClientReconciliation(clientId, caseId, ayClean).catch(() => {})
+      return mapped
+    } catch (err) {
+      setExtractionError(err?.message || 'Document extraction failed.')
+      throw err
+    } finally {
+      setIsSimulatingExtraction(false)
+    }
+  }
+
+  const extractSingleDocument = async (
+    docId,
+    caseId = activeTaxCase?.caseId || resolveBackendCaseId(activeClientId, activeAy)
+  ) => {
+    setExtractionError(null)
+    setIsSimulatingExtraction(true)
+    try {
+      const updatedRaw = await apiClient.extractDocumentById(docId, caseId)
+      const mapped = mapBackendDocumentToUi(updatedRaw)
+      setDocuments((prev) => prev.map((d) => (d.id === docId ? mapped : d)))
+      addAuditLog(
+        'DOCUMENT_EXTRACTED',
+        `Ran extraction on ${mapped.name} (${mapped.extractionEngine || 'PARSER'}).`,
+        activeClient?.name,
+        activeClient?.pan,
+        'Extraction'
+      )
+      if (mapped.clientId) {
+        const ayClean = String(activeAy || '2025-26').replace(/^AY\s*/i, '')
+        await runClientReconciliation(mapped.clientId, caseId, ayClean).catch(() => {})
+      }
+      return mapped
+    } catch (err) {
+      setExtractionError(err?.message || 'Extraction failed for document.')
+      throw err
+    } finally {
+      setIsSimulatingExtraction(false)
+    }
+  }
+
+  const correctDocumentField = async (
+    docId,
+    fieldKey,
+    {
+      correctedValue,
+      correctionReason,
+      caseId = activeTaxCase?.caseId || resolveBackendCaseId(activeClientId, activeAy),
+    }
+  ) => {
+    setExtractionError(null)
+    try {
+      const updatedRaw = await apiClient.correctDocumentField(docId, fieldKey, {
+        correctedValue,
+        correctionReason,
+        caseId,
+      })
+      const mapped = mapBackendDocumentToUi(updatedRaw)
+      setDocuments((prev) => prev.map((d) => (d.id === docId ? mapped : d)))
+      addAuditLog(
+        'CA_FIELD_CORRECTED',
+        `Corrected field '${fieldKey}' on ${mapped.name}. Reason: ${correctionReason}`,
+        activeClient?.name,
+        activeClient?.pan,
+        'CA Review'
+      )
+      if (mapped.clientId) {
+        const ayClean = String(activeAy || '2025-26').replace(/^AY\s*/i, '')
+        await runClientReconciliation(mapped.clientId, caseId, ayClean).catch(() => {})
+      }
+      return mapped
+    } catch (err) {
+      setExtractionError(err?.message || 'Field correction failed.')
+      throw err
+    }
+  }
+
+  const verifyDocumentField = async (
+    docId,
+    fieldKey,
+    { caseId = activeTaxCase?.caseId || resolveBackendCaseId(activeClientId, activeAy) } = {}
+  ) => {
+    setExtractionError(null)
+    try {
+      const updatedRaw = await apiClient.verifyDocumentField(docId, fieldKey, { caseId })
+      const mapped = mapBackendDocumentToUi(updatedRaw)
+      setDocuments((prev) => prev.map((d) => (d.id === docId ? mapped : d)))
+      addAuditLog(
+        'CA_FIELD_VERIFIED',
+        `Verified extracted field '${fieldKey}' on ${mapped.name}.`,
+        activeClient?.name,
+        activeClient?.pan,
+        'CA Review'
+      )
+      if (mapped.clientId) {
+        await fetchClientReconciliationAndTax(mapped.clientId, caseId).catch(() => {})
+      }
+      return mapped
+    } catch (err) {
+      setExtractionError(err?.message || 'Field verification failed.')
+      throw err
+    }
+  }
+
+  // Record Report Generated
   const recordReportGenerated = (caseId = activeTaxCase?.caseId) => {
     const targetCaseId = caseId || activeTaxCase?.caseId || activeTaxCase?.id
     setTaxCases((prev) =>
@@ -966,6 +1463,33 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider
       value={{
+        authSession,
+        authError,
+        isSyncingBackend,
+        extractionError,
+        clearAuthError,
+        clearExtractionError,
+        signInBackendSession,
+        connectWithBearerToken,
+        signOutBackendSession,
+        syncBackendWorkspace,
+        fetchClientDocumentsFromBackend,
+        extractClientDocuments,
+        extractSingleDocument,
+        correctDocumentField,
+        verifyDocumentField,
+        backendReconciliation,
+        backendTaxComparison,
+        isLoadingReconciliation,
+        reconciliationError,
+        isComputingTax,
+        taxError,
+        clearReconciliationError,
+        fetchClientReconciliationAndTax,
+        runClientReconciliation,
+        resolveReconciliationIssue,
+        computeClientTax,
+        approveClientTaxBackend,
         clients,
         setClients,
         activeClient,

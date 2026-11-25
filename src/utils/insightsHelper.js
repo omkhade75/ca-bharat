@@ -3,6 +3,7 @@
 // All recommendations and assumptions are illustrative and require CA certification.
 
 import { formatINR } from './formatters'
+import { normalizeDocumentCategory } from './documentMapper'
 
 /**
  * Checks whether the client's tax case has sufficient data to generate insights.
@@ -35,12 +36,12 @@ export function isClientDataIncomplete(client, taxCase, clientDocs = []) {
 export function deriveClientFinancialSnapshot(client, taxCase, clientDocs = []) {
   if (!client || !taxCase || isClientDataIncomplete(client, taxCase, clientDocs)) {
     // Determine missing documents
-    const uploadedCategories = new Set((clientDocs || []).map((d) => d.category))
+    const uploadedCategories = new Set((clientDocs || []).map((d) => normalizeDocumentCategory(d.category)))
     const missingDocs = []
     if (!uploadedCategories.has('Form 16')) missingDocs.push('Form 16 (Part A & B)')
     if (!uploadedCategories.has('Form 26AS')) missingDocs.push('TRACES Form 26AS')
     if (!uploadedCategories.has('AIS / TIS')) missingDocs.push('AIS / TIS Statement')
-    if (!uploadedCategories.has('Bank Statement / Certificate') && !uploadedCategories.has('Supporting Schedule')) {
+    if (!uploadedCategories.has('Bank Statement / Certificate')) {
       missingDocs.push(client?.category?.includes('Professional') ? 'Clinic P&L / Receipts Statement' : 'Bank Statement / Sec 24(b) Certificate')
     }
 

@@ -10,12 +10,18 @@ Tests:
 - Dynamic document checklist adaptation
 """
 
+import os
+import sys
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.models.client_models import LegalTaxpayerTypeEnum, IndividualOccupationEnum, ClientProfile
 
+sys.path.insert(0, os.path.dirname(__file__))
+from auth_helper import authenticate_test_client
+
 client = TestClient(app)
+client.headers.update(authenticate_test_client(client))
 
 def test_persona_1_individual_salaried():
     """Arun Kumar Verma: Salaried Individual with Form 16 & interest."""

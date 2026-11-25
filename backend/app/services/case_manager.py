@@ -34,7 +34,7 @@ class CaseManager:
     def seed_statutory_cases(self):
         """Seeds initial realistic statutory cases (Arun Kumar Verma & Dr. Radhika Sen)."""
         arun = ClientProfile(
-            id="c-001",
+            id="client-arun-01",
             pan="ABCPA1092F",
             name="Arun Kumar Verma",
             legal_type=LegalTaxpayerTypeEnum.INDIVIDUAL,
@@ -95,7 +95,7 @@ class CaseManager:
 
         # Dr. Radhika Sen (Professional u/s 44ADA)
         radhika = ClientProfile(
-            id="c-002",
+            id="client-radhika-02",
             pan="ABCPR5491M",
             name="Dr. Radhika Sen",
             legal_type=LegalTaxpayerTypeEnum.INDIVIDUAL,
@@ -254,13 +254,39 @@ class CaseManager:
             pass
         return None
 
-    def verify_client_case_ownership(self, pan: str, client_id: Optional[str] = None, case_id: Optional[str] = None) -> bool:
+    def get_client_by_id(self, client_id: str) -> Optional[ClientProfile]:
+        """Finds client using internal client_id to avoid exposing PAN in URL parameters."""
+        for client in self.clients.values():
+            if client.id == client_id:
+                return client
+        try:
+            from ..db.session import SessionLocal
+            from ..db.repository import TaxpayerRepository
+            db = SessionLocal()
+            try:
+                repo = TaxpayerRepository(db)
+                all_clients = repo.get_all_clients()
+                for c in all_clients:
+                    if c.id == client_id:
+                        return self.get_client(c.pan)
+            finally:
+                db.close()
+        except Exception:
+            pass
+        return None
+
+    def verify_client_case_ownership(self, pan: Optional[str] = None, client_id: Optional[str] = None, case_id: Optional[str] = None) -> bool:
         """Verifies that client exists and matches PAN / client_id before allowing document ops."""
-        pan_upper = pan.upper()
-        client = self.get_client(pan_upper)
+        client = None
+        if client_id:
+            client = self.get_client_by_id(client_id)
+        if not client and pan:
+            client = self.get_client(pan.upper())
         if not client:
             return False
         if client_id and client.id and client.id != client_id:
+            return False
+        if pan and client.pan and client.pan != pan.upper():
             return False
         return True
 

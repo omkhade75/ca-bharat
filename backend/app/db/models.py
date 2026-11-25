@@ -85,8 +85,12 @@ class DBUploadedDocument(Base):
     storage_path = Column(String(512), nullable=True)
     review_notes = Column(Text, nullable=True)
     waive_reason = Column(Text, nullable=True)
-    extracted_data_json = Column(Text, nullable=True)  # JSON serialization of parsed fields
-    citations_json = Column(Text, nullable=True)       # JSON bounding box coordinates [x0, y0, x1, y1]
+    extracted_data_json = Column(Text, nullable=True)  # JSON serialization of parsed fields (immutable original)
+    citations_json = Column(Text, nullable=True)       # JSON bounding box coordinates [x0, y0, x1, y1] (immutable original)
+    corrected_fields_json = Column(Text, nullable=True) # JSON store for CA corrections: original vs corrected, CA identity, reason
+    extraction_engine = Column(String(32), default="DETERMINISTIC_PDF") # DETERMINISTIC_PDF, UNSUPPORTED_TYPE, PARSING_FAILED
+    evidence_score = Column(Float, nullable=True)       # Coordinate localization score (NOT OCR accuracy)
+    ocr_confidence = Column(Float, nullable=True)       # Deprecated legacy column
     uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     taxpayer = relationship("DBClientProfile", back_populates="documents")
@@ -95,18 +99,32 @@ class DBReconciliationItem(Base):
     __tablename__ = "reconciliation_items"
 
     id = Column(String(64), primary_key=True, index=True)
+    client_id = Column(String(64), nullable=True, index=True)
+    case_id = Column(String(64), nullable=True, index=True)
     client_pan = Column(String(10), ForeignKey("taxpayer_profiles.pan"), index=True, nullable=False)
+    row_key = Column(String(64), nullable=True, index=True)
+    category = Column(String(64), nullable=True)
     source_a = Column(String(64), nullable=False)
     source_b = Column(String(64), nullable=False)
     field_name = Column(String(128), nullable=False)
-    amount_a = Column(Float, default=0.0)
-    amount_b = Column(Float, default=0.0)
+    amount_a = Column(Float, nullable=True, default=None)
+    amount_b = Column(Float, nullable=True, default=None)
+    ais_value = Column(Float, nullable=True, default=None)
     variance = Column(Float, default=0.0)
     status = Column(String(32), default="MATCH")  # MATCH, MISMATCH, RESOLVED
+    match_status = Column(String(32), nullable=True)  # MATCHED, MISMATCH_VARIANCE, AIS_UNRECORDED_INCOME, etc.
     notice_risk = Column(String(16), default="LOW")  # LOW, MEDIUM, HIGH
+    statutory_rule = Column(Text, nullable=True)
+    explanation = Column(Text, nullable=True)
     resolution_action = Column(String(64), nullable=True)
+    resolved_value = Column(Float, default=0.0)
     ca_notes = Column(Text, nullable=True)
     is_accepted = Column(Boolean, default=False)
+    resolved_by = Column(String(128), nullable=True)
+    resolved_at = Column(String(64), nullable=True)
+    source_citations_json = Column(Text, nullable=True)
+    original_values_json = Column(Text, nullable=True)
+    corrections_applied_json = Column(Text, nullable=True)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     taxpayer = relationship("DBClientProfile", back_populates="reconciliation_items")
@@ -115,6 +133,8 @@ class DBTaxComputation(Base):
     __tablename__ = "tax_computations"
 
     id = Column(String(64), primary_key=True, index=True)
+    client_id = Column(String(64), nullable=True, index=True)
+    case_id = Column(String(64), nullable=True, index=True)
     client_pan = Column(String(10), ForeignKey("taxpayer_profiles.pan"), index=True, nullable=False)
     ay = Column(String(16), default="2025-26")
     gross_total_income = Column(Float, default=0.0)
@@ -125,7 +145,11 @@ class DBTaxComputation(Base):
     refund_due = Column(Float, default=0.0)
     balance_payable = Column(Float, default=0.0)
     computation_json = Column(Text, nullable=True)  # Full breakdown JSON
+    data_source = Column(String(64), default="VALIDATED_BACKEND_DOCUMENTS")
+    validation_status = Column(String(32), default="READY")
+    validation_gate_json = Column(Text, nullable=True)
     is_ca_approved = Column(Boolean, default=False)
+    ca_approver = Column(String(128), nullable=True)
     ca_sign_off_hash = Column(String(64), nullable=True)
     ca_notes = Column(Text, nullable=True)
     approved_at = Column(DateTime, nullable=True)

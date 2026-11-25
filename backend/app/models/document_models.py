@@ -44,7 +44,9 @@ class SourceCitation(BaseModel):
     page_number: int
     bounding_box: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0, 0.0])  # [x0, y0, x1, y1]
     raw_text: str
-    confidence: float = 0.99
+    # Measures coordinate localization completeness (1.0 = pattern + PDF bounding box verified), NOT OCR accuracy
+    evidence_score: float = 0.0
+    evidence_status: str = "COORDINATE_VERIFIED"  # COORDINATE_VERIFIED, TEXT_MATCH_ONLY, NOT_LOCATED
     document_name: str
 
 class TDSQuarterRecord(BaseModel):
@@ -168,7 +170,8 @@ class ExtractionResult(BaseModel):
     assessment_year: str = "2025-26"
     extracted_data: Dict[str, Any]
     citations: List[SourceCitation] = Field(default_factory=list)
-    ocr_confidence: float = 0.99
+    evidence_score: Optional[float] = None
+    evidence_methodology: str = "COORDINATE_LOCALIZATION_RATIO"
     processed_at: str
 
 class DocumentRecord(BaseModel):
@@ -190,7 +193,30 @@ class DocumentRecord(BaseModel):
     review_notes: Optional[str] = None
     waive_reason: Optional[str] = None
     citations_count: int = 0
+    extracted_data: Optional[Dict[str, Any]] = None
+    citations: Optional[List[Dict[str, Any]]] = None
+    corrected_fields: Optional[Dict[str, Any]] = None
+    extraction_engine: str = "DETERMINISTIC_PDF"  # DETERMINISTIC_PDF, UNSUPPORTED_TYPE, PARSING_FAILED
+    extraction_supported: bool = True
+    evidence_score: Optional[float] = None
+    evidence_methodology: Optional[str] = None
     uploaded_at: str
+
+class FieldCorrectionRequest(BaseModel):
+    field_key: Optional[str] = None
+    corrected_value: Any
+    correction_reason: str = Field(..., min_length=3, description="Mandatory CA justification for compliance audit trail")
+    ca_identity: Optional[str] = None
+    case_id: Optional[str] = None
+
+class FieldVerifyRequest(BaseModel):
+    field_key: Optional[str] = None
+    ca_identity: Optional[str] = None
+    case_id: Optional[str] = None
+
+class BatchExtractRequest(BaseModel):
+    client_id: str
+    case_id: Optional[str] = None
 
 class DocumentStatusUpdateRequest(BaseModel):
     ca_review_status: str
