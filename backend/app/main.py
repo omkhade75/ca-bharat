@@ -17,6 +17,8 @@ from .api import (
     routes_documents,
     routes_reconcile,
     routes_calculate,
+    routes_itr,
+    routes_filing,
     routes_export,
     routes_audit,
 )
@@ -60,6 +62,8 @@ app.include_router(routes_extract.router)
 app.include_router(routes_documents.router)
 app.include_router(routes_reconcile.router)
 app.include_router(routes_calculate.router)
+app.include_router(routes_itr.router)
+app.include_router(routes_filing.router)
 app.include_router(routes_export.router)
 app.include_router(routes_audit.router)
 

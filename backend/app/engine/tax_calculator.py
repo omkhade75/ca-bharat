@@ -250,9 +250,80 @@ class TaxCalculator:
         if new_res.total_tax_liability <= old_res.total_tax_liability:
             rec = TaxRegimeEnum.NEW_REGIME_115BAC
             savings = old_res.total_tax_liability - new_res.total_tax_liability
+            reason = (
+                f"New Tax Regime (Sec 115BAC) is optimal: saves ₹{savings:,.2f} over Old Regime. "
+                f"The enhanced Standard Deduction of ₹{new_res.total_deductions:,.0f} (AY {assessment_year}) "
+                f"and wider concessional slabs (5%-20%) yield lower net tax liability than available Old Regime deductions."
+            )
         else:
             rec = TaxRegimeEnum.OLD_REGIME
             savings = new_res.total_tax_liability - old_res.total_tax_liability
+            reason = (
+                f"Old Tax Regime is optimal: Chapter VI-A deductions and allowances (₹{old_res.total_deductions:,.2f}) "
+                f"reduce net taxable income to ₹{old_res.total_taxable_income:,.2f}, saving ₹{savings:,.2f} over New Regime."
+            )
+
+        # Flag missing information requiring CA verification
+        missing_flags = []
+        if deductions.sec_80d_health > 0:
+            missing_flags.append(
+                "Verify Section 80D health insurance premium payment mode (cash ineligible except preventive checkup max ₹5,000)."
+            )
+        if deductions.sec_80c > 0:
+            missing_flags.append(
+                "Verify Section 80C investment proofs (ELSS statement, PPF deposit receipt, EPF statement, LIC receipts)."
+            )
+        if income.savings_interest > 10000.0 and deductions.sec_80tta_ttb_interest == 0:
+            missing_flags.append(
+                "Savings interest exceeds ₹10,000 limit; confirm eligibility for Section 80TTA deduction under Old Regime."
+            )
+        if prepaid_tax == 0.0 and advance_tax == 0.0:
+            missing_flags.append(
+                "No prepaid tax credit recorded; verify 26AS/AIS SFT records to ensure all TDS/TCS entries are claimed."
+            )
+
+        breakdown = {
+            "income_heads": {
+                "salary": income.income_salaries,
+                "house_property": income.income_house_property,
+                "pgbp": income.income_pgbp,
+                "capital_gains": income.total_capital_gains,
+                "other_sources": income.total_other_sources,
+                "gross_total_income": new_res.gross_total_income,
+            },
+            "new_regime_steps": {
+                "standard_deduction": new_res.total_deductions,
+                "taxable_income": new_res.total_taxable_income,
+                "slab_tax": new_res.basic_tax,
+                "rebate_87a": new_res.rebate_87a,
+                "tax_after_rebate": new_res.tax_after_rebate,
+                "surcharge": new_res.surcharge,
+                "cess_4pct": new_res.health_and_education_cess,
+                "total_liability": new_res.total_tax_liability,
+                "total_prepaid_tax": new_res.total_prepaid_tax,
+                "net_tax_payable_or_refund": new_res.net_tax_payable_or_refund,
+            },
+            "old_regime_steps": {
+                "standard_deduction": min(income.income_salaries, 50000.0) if income.income_salaries > 0 else 0.0,
+                "professional_tax": deductions.professional_tax,
+                "chapter_via_deductions": max(
+                    0.0,
+                    old_res.total_deductions
+                    - (50000.0 if income.income_salaries > 0 else 0.0)
+                    - deductions.professional_tax,
+                ),
+                "total_deductions": old_res.total_deductions,
+                "taxable_income": old_res.total_taxable_income,
+                "slab_tax": old_res.basic_tax,
+                "rebate_87a": old_res.rebate_87a,
+                "tax_after_rebate": old_res.tax_after_rebate,
+                "surcharge": old_res.surcharge,
+                "cess_4pct": old_res.health_and_education_cess,
+                "total_liability": old_res.total_tax_liability,
+                "total_prepaid_tax": old_res.total_prepaid_tax,
+                "net_tax_payable_or_refund": old_res.net_tax_payable_or_refund,
+            },
+        }
 
         return RegimeComparisonResult(
             client_pan=client_pan,
@@ -263,4 +334,7 @@ class TaxCalculator:
             recommended_regime=rec,
             tax_savings=round(savings, 2),
             ca_sign_off_status="PENDING_CA_REVIEW",
+            regime_comparison_reason=reason,
+            missing_information_flags=missing_flags,
+            calculation_breakdown=breakdown,
         )

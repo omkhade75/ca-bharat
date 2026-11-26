@@ -574,6 +574,11 @@ class TaxpayerRepository:
             data_source=computation_data.get("data_source", "VALIDATED_BACKEND_DOCUMENTS"),
             validation_status=computation_data.get("validation_status", "READY"),
             validation_gate_json=json.dumps(computation_data.get("validation_gate", {})),
+            selected_itr_form=computation_data.get("selected_itr_form", "ITR-1"),
+            itr_selection_json=json.dumps(computation_data.get("itr_selection", {})) if computation_data.get("itr_selection") else None,
+            filing_package_json=json.dumps(computation_data.get("filing_package", {})) if computation_data.get("filing_package") else None,
+            ca_review_status=computation_data.get("ca_review_status", "PENDING_CA_REVIEW"),
+            ca_return_reason=computation_data.get("ca_return_reason"),
             is_ca_approved=computation_data.get("is_ca_approved", False),
             ca_approver=computation_data.get("ca_approver"),
             ca_sign_off_hash=computation_data.get("ca_sign_off_hash"),
@@ -606,6 +611,95 @@ class TaxpayerRepository:
         if recommended_regime:
             comp.recommended_regime = recommended_regime
         comp.approved_at = datetime.now(timezone.utc)
+        comp.ca_review_status = "CA_APPROVED"
+        self.db.commit()
+        self.db.refresh(comp)
+        return comp
+
+    def update_itr_selection(
+        self,
+        pan: str,
+        selected_itr_form: str,
+        itr_selection_data: Dict[str, Any],
+        client_id: Optional[str] = None,
+        ca_notes: Optional[str] = None,
+        confirmed_by: Optional[str] = None,
+    ) -> Optional[DBTaxComputation]:
+        comp = self.get_tax_computation_by_client_id(client_id) if client_id else None
+        if not comp:
+            comp = self.get_tax_computation_by_pan(pan)
+        if not comp:
+            comp = self.save_tax_computation(
+                pan=pan,
+                computation_data={
+                    "client_id": client_id,
+                    "selected_itr_form": selected_itr_form,
+                    "itr_selection": itr_selection_data,
+                    "details": {},
+                },
+            )
+        comp.selected_itr_form = selected_itr_form
+        comp.itr_selection_json = json.dumps(itr_selection_data)
+        if ca_notes:
+            comp.ca_notes = ca_notes
+        self.db.commit()
+        self.db.refresh(comp)
+        return comp
+
+    def reject_tax_computation(
+        self,
+        pan: str,
+        ca_rejector: str,
+        reason: str,
+        client_id: Optional[str] = None,
+    ) -> Optional[DBTaxComputation]:
+        comp = self.get_tax_computation_by_client_id(client_id) if client_id else None
+        if not comp:
+            comp = self.get_tax_computation_by_pan(pan)
+        if not comp:
+            return None
+        comp.is_ca_approved = False
+        comp.ca_review_status = "REJECTED"
+        comp.ca_approver = ca_rejector
+        comp.ca_return_reason = reason
+        comp.ca_notes = f"REJECTED by CA: {reason}"
+        self.db.commit()
+        self.db.refresh(comp)
+        return comp
+
+    def return_tax_computation_for_correction(
+        self,
+        pan: str,
+        ca_actor: str,
+        reason: str,
+        client_id: Optional[str] = None,
+    ) -> Optional[DBTaxComputation]:
+        comp = self.get_tax_computation_by_client_id(client_id) if client_id else None
+        if not comp:
+            comp = self.get_tax_computation_by_pan(pan)
+        if not comp:
+            return None
+        comp.is_ca_approved = False
+        comp.ca_review_status = "RETURNED_FOR_CORRECTION"
+        comp.ca_approver = ca_actor
+        comp.ca_return_reason = reason
+        comp.ca_notes = f"RETURNED FOR CORRECTION: {reason}"
+        self.db.commit()
+        self.db.refresh(comp)
+        return comp
+
+    def save_filing_package(
+        self,
+        pan: str,
+        filing_package_data: Dict[str, Any],
+        client_id: Optional[str] = None,
+    ) -> Optional[DBTaxComputation]:
+        comp = self.get_tax_computation_by_client_id(client_id) if client_id else None
+        if not comp:
+            comp = self.get_tax_computation_by_pan(pan)
+        if not comp:
+            return None
+        comp.filing_package_json = json.dumps(filing_package_data)
         self.db.commit()
         self.db.refresh(comp)
         return comp

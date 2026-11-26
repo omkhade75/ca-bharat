@@ -3,8 +3,6 @@
 
 import { DEFAULT_INTAKE_DISCOVERY } from './intakeSchema'
 
-export const INITIAL_CLIENTS = []
-
 // Realistic Indian statutory entity profiles covering the full legal spectrum
 export const SAMPLE_STATUTORY_CLIENTS = [
   {
@@ -211,3 +209,6 @@ export const SAMPLE_STATUTORY_CLIENTS = [
     },
   },
 ]
+
+export const INITIAL_CLIENTS = SAMPLE_STATUTORY_CLIENTS
+

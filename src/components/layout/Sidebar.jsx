@@ -22,12 +22,6 @@ export default function Sidebar({ isMobileOpen = false, onCloseMobile = () => {}
 
   const navItems = [
     {
-      to: '/dashboard',
-      label: 'Mission Control',
-      icon: LayoutDashboard,
-      badge: null,
-    },
-    {
       to: '/firm-clients',
       label: 'Firm & Clients',
       icon: Users,
@@ -49,28 +43,17 @@ export default function Sidebar({ isMobileOpen = false, onCloseMobile = () => {}
       badgeVariant: 'warning',
     },
     {
-      to: '/insights-delivery',
-      label: 'Insights & Advisory',
-      icon: Sparkles,
-      badge: 'Engine 2',
-      badgeVariant: 'gold',
+      to: '/dashboard',
+      label: 'Mission Control',
+      icon: LayoutDashboard,
+      badge: null,
     },
   ]
 
   const secondaryNavItems = [
     {
-      to: '/settings',
-      label: 'Firm Settings',
-      icon: Settings,
-    },
-    {
-      to: '/help',
-      label: 'Help & Compliance',
-      icon: HelpCircle,
-    },
-    {
       to: '/',
-      label: 'Public Landing Page',
+      label: 'Workflow Home',
       icon: Globe,
     },
   ]

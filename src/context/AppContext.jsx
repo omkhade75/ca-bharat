@@ -28,11 +28,13 @@ import {
   mapBackendDocumentToUi,
   mapBackendReconciliationToUi,
   mapBackendTaxComparisonToUi,
+  mapBackendITRSelectionToUi,
+  mapBackendFilingPackageToUi,
   mergeBackendClientsAndCases,
   resolveBackendCaseId,
 } from '../utils/documentMapper'
 
-const AppContext = createContext(null)
+export const AppContext = createContext(null)
 
 export function AppProvider({ children }) {
   // State with LocalStorage persistence
@@ -69,6 +71,12 @@ export function AppProvider({ children }) {
   const [reconciliationError, setReconciliationError] = useState(null)
   const [isComputingTax, setIsComputingTax] = useState(false)
   const [taxError, setTaxError] = useState(null)
+  const [backendItrSelection, setBackendItrSelection] = useState(null)
+  const [isLoadingItrSelection, setIsLoadingItrSelection] = useState(false)
+  const [itrSelectionError, setItrSelectionError] = useState(null)
+  const [backendFilingPackage, setBackendFilingPackage] = useState(null)
+  const [isLoadingFilingPackage, setIsLoadingFilingPackage] = useState(false)
+  const [filingPackageError, setFilingPackageError] = useState(null)
 
   // Sync to storage on updates
   useEffect(() => { saveToStorage(STORAGE_KEYS.CLIENTS, clients) }, [clients])
@@ -978,7 +986,7 @@ export function AppProvider({ children }) {
     setReconciliationError(null)
     setTaxError(null)
     try {
-      const [rawMatrix, rawTax] = await Promise.all([
+      const [rawMatrix, rawTax, rawItr, rawFiling] = await Promise.all([
         apiClient.getBackendReconciliation(clientId, caseId).catch((err) => {
           if (err?.status !== 404) setReconciliationError(err?.message || 'Unable to load reconciliation.')
           return null
@@ -987,12 +995,23 @@ export function AppProvider({ children }) {
           if (err?.status !== 404) setTaxError(err?.message || 'Unable to load tax calculation.')
           return null
         }),
+        apiClient.getITRSelection(clientId, caseId).catch((err) => {
+          if (err?.status !== 404) setItrSelectionError(err?.message || 'Unable to load ITR selection.')
+          return null
+        }),
+        apiClient.getFilingPackage(clientId, caseId).catch((err) => {
+          return null
+        }),
       ])
       const mappedMatrix = rawMatrix ? mapBackendReconciliationToUi(rawMatrix) : null
       const mappedTax = rawTax ? mapBackendTaxComparisonToUi(rawTax) : null
+      const mappedItr = rawItr ? mapBackendITRSelectionToUi(rawItr) : null
+      const mappedFiling = rawFiling ? mapBackendFilingPackageToUi(rawFiling) : null
       setBackendReconciliation(mappedMatrix)
       setBackendTaxComparison(mappedTax)
-      return { matrix: mappedMatrix, tax: mappedTax }
+      setBackendItrSelection(mappedItr)
+      setBackendFilingPackage(mappedFiling)
+      return { matrix: mappedMatrix, tax: mappedTax, itr: mappedItr, filing: mappedFiling }
     } finally {
       setIsLoadingReconciliation(false)
     }
@@ -1259,6 +1278,115 @@ export function AppProvider({ children }) {
     return res
   }
 
+  const confirmClientITRSelection = async (
+    clientId = activeClientId,
+    {
+      caseId = activeTaxCase?.caseId || resolveBackendCaseId(activeClientId, activeAy),
+      confirmedForm,
+      caNotes = '',
+    }
+  ) => {
+    setItrSelectionError(null)
+    const raw = await apiClient.confirmITRSelection(clientId, {
+      caseId,
+      confirmedForm,
+      caNotes,
+    })
+    const mapped = mapBackendITRSelectionToUi(raw)
+    setBackendItrSelection(mapped)
+    // Update local client selected ITR if needed
+    setClients((prev) =>
+      prev.map((c) => (c.id === clientId ? { ...c, itrFormType: confirmedForm, selectedItrForm: confirmedForm } : c))
+    )
+    addAuditLog(
+      'ITR_SELECTION_CONFIRMED',
+      `CA confirmed ITR Form: ${confirmedForm}. Notes: ${caNotes || 'Confirmed by CA'}`,
+      activeClient?.name,
+      activeClient?.pan,
+      'ITR Selection'
+    )
+    return mapped
+  }
+
+  const returnClientTaxForCorrection = async (
+    clientId = activeClientId,
+    {
+      caseId = activeTaxCase?.caseId || resolveBackendCaseId(activeClientId, activeAy),
+      reason,
+    }
+  ) => {
+    setTaxError(null)
+    const res = await apiClient.returnTaxComputationForCorrection(clientId, {
+      caseId,
+      reason,
+    })
+    await fetchClientReconciliationAndTax(clientId, caseId)
+    addAuditLog(
+      'TAX_COMPUTATION_RETURNED',
+      `CA returned computation for correction: ${reason}`,
+      activeClient?.name,
+      activeClient?.pan,
+      'CA Review'
+    )
+    return res
+  }
+
+  const rejectClientTaxComputation = async (
+    clientId = activeClientId,
+    {
+      caseId = activeTaxCase?.caseId || resolveBackendCaseId(activeClientId, activeAy),
+      reason,
+    }
+  ) => {
+    setTaxError(null)
+    const res = await apiClient.rejectTaxComputation(clientId, {
+      caseId,
+      reason,
+    })
+    await fetchClientReconciliationAndTax(clientId, caseId)
+    addAuditLog(
+      'TAX_COMPUTATION_REJECTED',
+      `CA rejected tax computation: ${reason}`,
+      activeClient?.name,
+      activeClient?.pan,
+      'CA Review'
+    )
+    return res
+  }
+
+  const fetchClientFilingPackage = async (
+    clientId = activeClientId,
+    caseId = activeTaxCase?.caseId || resolveBackendCaseId(activeClientId, activeAy)
+  ) => {
+    setIsLoadingFilingPackage(true)
+    setFilingPackageError(null)
+    try {
+      const raw = await apiClient.getFilingPackage(clientId, caseId)
+      const mapped = mapBackendFilingPackageToUi(raw)
+      setBackendFilingPackage(mapped)
+      return mapped
+    } catch (err) {
+      setFilingPackageError(err?.message || 'Failed to generate filing package.')
+      throw err
+    } finally {
+      setIsLoadingFilingPackage(false)
+    }
+  }
+
+  const downloadClientFilingJson = async (clientId = activeClientId) => {
+    const raw = await apiClient.downloadFilingPackageJson(clientId)
+    const blob = new Blob([JSON.stringify(raw, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ITR_Filing_Package_${activeClient?.pan || clientId}_AY2025-26.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    return raw
+  }
+
   const extractClientDocuments = async (
     clientId = activeClientId,
     caseId = activeTaxCase?.caseId || resolveBackendCaseId(activeClientId, activeAy)
@@ -1490,6 +1618,17 @@ export function AppProvider({ children }) {
         resolveReconciliationIssue,
         computeClientTax,
         approveClientTaxBackend,
+        backendItrSelection,
+        isLoadingItrSelection,
+        itrSelectionError,
+        confirmClientITRSelection,
+        backendFilingPackage,
+        isLoadingFilingPackage,
+        filingPackageError,
+        fetchClientFilingPackage,
+        downloadClientFilingJson,
+        returnClientTaxForCorrection,
+        rejectClientTaxComputation,
         clients,
         setClients,
         activeClient,

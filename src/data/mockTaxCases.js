@@ -1,8 +1,6 @@
 // Comprehensive Tax Case & 3-Way Reconciliation Mock Data for CA Bharat AI Prototype
 // Compliant with Income-tax Act, 1961
 
-export const INITIAL_TAX_CASES = []
-
 export const SAMPLE_STATUTORY_TAX_CASES = [
   // --- Case 1: Arun Kumar Verma (cli-001) ---
   {
@@ -223,3 +221,6 @@ export const SAMPLE_STATUTORY_TAX_CASES = [
     },
   },
 ]
+
+export const INITIAL_TAX_CASES = SAMPLE_STATUTORY_TAX_CASES
+

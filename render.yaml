@@ -14,6 +14,10 @@ services:
         value: 3.11.9
       - key: APP_NAME
         value: CA Bharat AI Enterprise Backend
+      - key: SESSION_SECRET_KEY
+        generateValue: true
+      - key: ENABLE_LEADERSHIP_DEMO_AUTH
+        value: "true"
 
   - type: web
     name: ca-bharat-ai

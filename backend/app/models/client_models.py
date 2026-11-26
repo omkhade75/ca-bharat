@@ -80,6 +80,8 @@ class ClientProfile(BaseModel):
     residential_status: ResidentialStatusEnum = ResidentialStatusEnum.RESIDENT
     category: Optional[str] = "Individual - Salaried"
     recommended_itr: str = "ITR-1"
+    selected_itr_form: Optional[str] = "ITR-1"
+    itr_form_type: Optional[str] = "ITR-1 (Sahaj)"
     dob_or_doi: Optional[str] = None
     email: Optional[str] = None
     mobile: Optional[str] = None

@@ -405,10 +405,16 @@ export function mapBackendTaxComparisonToUi(comp) {
     },
     deductionsSummary: ded,
     caSignOffStatus: comp.ca_sign_off_status || 'PENDING_CA_REVIEW',
+    caReviewStatus: comp.ca_review_status || comp.ca_sign_off_status || 'PENDING_CA_REVIEW',
     caApprover: comp.ca_approver || null,
     caApprovalTimestamp: comp.ca_approval_timestamp || null,
     verificationHash: comp.verification_hash || null,
     caNotes: comp.ca_notes || null,
+    caReturnReason: comp.ca_return_reason || null,
+    selectedItrForm: comp.selected_itr_form || null,
+    regimeComparisonReason: comp.regime_comparison_reason || recommendationReason,
+    missingInformationFlags: Array.isArray(comp.missing_information_flags) ? comp.missing_information_flags : [],
+    calculationBreakdown: comp.calculation_breakdown || null,
     oldRegime: {
       regime: 'Old Regime',
       grossTotalIncome: Number(oldR.gross_total_income || 0),
@@ -447,6 +453,52 @@ export function mapBackendTaxComparisonToUi(comp) {
       totalTaxLiability: Number(newR.total_tax_liability || 0),
       refundAmount: Number(newR.refund_amount || 0),
       taxDueAmount: Number(newR.tax_due_amount || 0),
+    },
+  }
+}
+
+export function mapBackendITRSelectionToUi(sel) {
+  if (!sel || typeof sel !== 'object') return null
+  return {
+    clientId: sel.client_id || '',
+    clientPan: sel.client_pan || '',
+    recommendedForm: sel.recommended_form || 'ITR-1 (Sahaj)',
+    formCode: sel.form_code || 'ITR-1',
+    taxpayerType: sel.taxpayer_type || 'INDIVIDUAL',
+    selectionReason: sel.selection_reason || '',
+    isEligible: Boolean(sel.is_eligible),
+    satisfiedConditions: Array.isArray(sel.satisfied_conditions) ? sel.satisfied_conditions : [],
+    ineligibleForms: Array.isArray(sel.ineligible_forms) ? sel.ineligible_forms : [],
+    missingInformationFlags: Array.isArray(sel.missing_information_flags) ? sel.missing_information_flags : [],
+    requiresCaConfirmation: Boolean(sel.requires_ca_confirmation),
+    isCaConfirmed: Boolean(sel.is_ca_confirmed),
+    confirmedForm: sel.confirmed_form || null,
+    caNotes: sel.ca_notes || null,
+    evaluatedAt: sel.evaluated_at || null,
+  }
+}
+
+export function mapBackendFilingPackageToUi(pkg) {
+  if (!pkg || typeof pkg !== 'object') return null
+  return {
+    clientId: pkg.client_id || '',
+    clientPan: pkg.client_pan || '',
+    clientName: pkg.client_name || '',
+    assessmentYear: pkg.assessment_year || '2025-26',
+    selectedItrForm: pkg.selected_itr_form || 'ITR-1 (Sahaj)',
+    isCaApproved: Boolean(pkg.is_ca_approved),
+    caApprover: pkg.ca_approver || null,
+    approvalTimestamp: pkg.approval_timestamp || null,
+    verificationHash: pkg.verification_hash || null,
+    filingStatus: pkg.filing_status || 'PENDING_CA_APPROVAL',
+    demoDisclaimer: pkg.demo_disclaimer || '',
+    schedules: pkg.schedules || {},
+    itrJsonPayload: pkg.itr_json_payload || {},
+    validationReport: pkg.validation_report || {
+      is_valid: false,
+      total_checks_run: 0,
+      errors: [],
+      warnings: [],
     },
   }
 }

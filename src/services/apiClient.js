@@ -542,6 +542,73 @@ class ApiClient {
     })
   }
 
+  async returnTaxComputationForCorrection(clientId, { caseId = null, reason }) {
+    return this._request(`/api/calculate/client/${encodeURIComponent(clientId)}/return-for-correction`, {
+      method: 'POST',
+      body: {
+        ...(caseId ? { case_id: caseId } : {}),
+        reason,
+      },
+    })
+  }
+
+  async rejectTaxComputation(clientId, { caseId = null, reason }) {
+    return this._request(`/api/calculate/client/${encodeURIComponent(clientId)}/reject`, {
+      method: 'POST',
+      body: {
+        ...(caseId ? { case_id: caseId } : {}),
+        reason,
+      },
+    })
+  }
+
+  // ---------------------------------------------------------------------------
+  // 5b. ITR Selection & Filing Preparation Routes
+  // ---------------------------------------------------------------------------
+  async getITRSelection(clientId, caseId = null) {
+    return this._request(`/api/itr/client/${encodeURIComponent(clientId)}`, {
+      query: caseId ? { case_id: caseId } : null,
+    })
+  }
+
+  async evaluateITRSelection(clientId, { caseId = null, overrideAttributes = null } = {}) {
+    return this._request(`/api/itr/client/${encodeURIComponent(clientId)}/evaluate`, {
+      method: 'POST',
+      body: {
+        ...(caseId ? { case_id: caseId } : {}),
+        ...(overrideAttributes ? { override_attributes: overrideAttributes } : {}),
+      },
+    })
+  }
+
+  async confirmITRSelection(clientId, { caseId = null, confirmedForm, caNotes = '' }) {
+    return this._request(`/api/itr/client/${encodeURIComponent(clientId)}/confirm`, {
+      method: 'POST',
+      body: {
+        ...(caseId ? { case_id: caseId } : {}),
+        confirmed_form: confirmedForm,
+        ca_notes: caNotes,
+      },
+    })
+  }
+
+  async getFilingPackage(clientId, caseId = null) {
+    return this._request(`/api/filing/client/${encodeURIComponent(clientId)}/package`, {
+      query: caseId ? { case_id: caseId } : null,
+    })
+  }
+
+  async validateFilingPackage(clientId, caseId = null) {
+    return this._request(`/api/filing/client/${encodeURIComponent(clientId)}/validate`, {
+      method: 'POST',
+      body: caseId ? { case_id: caseId } : {},
+    })
+  }
+
+  async downloadFilingPackageJson(clientId) {
+    return this._request(`/api/filing/client/${encodeURIComponent(clientId)}/download-json`)
+  }
+
   // ---------------------------------------------------------------------------
   // 6. Regulatory Exports & Audit Logs
   // ---------------------------------------------------------------------------

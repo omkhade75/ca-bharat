@@ -366,7 +366,7 @@ describe('TaxReconciliationWorkflow Backend Integration', () => {
     await waitFor(() => {
       expect(screen.getByText(/Backend Deterministic Engine \(VALIDATED_BACKEND_DOCUMENTS\)/i)).toBeInTheDocument()
       expect(screen.getByText(/Gate: READY/i)).toBeInTheDocument()
-      expect(screen.getByText(/₹2,15,800/)).toBeInTheDocument()
+      expect(screen.getAllByText(/₹2,15,800/)[0]).toBeInTheDocument()
     })
 
     // CA Sign-off tab calls backend sign-off endpoint

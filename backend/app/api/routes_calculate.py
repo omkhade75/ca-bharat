@@ -57,6 +57,16 @@ class CASignOffRequest(BaseModel):
     case_id: Optional[str] = None
 
 
+class CAReturnForCorrectionRequest(BaseModel):
+    case_id: Optional[str] = None
+    reason: str
+
+
+class CARejectComputationRequest(BaseModel):
+    case_id: Optional[str] = None
+    reason: str
+
+
 def _compute_and_persist_from_validated_db(
     db: Session,
     actor: ActorContext,
@@ -101,14 +111,54 @@ def _compute_and_persist_from_validated_db(
 
     # Preserve existing CA sign-off metadata if DB already has approved record and validation hasn't regressed
     existing_comp = repo.get_tax_computation_by_client_id(client_id) or repo.get_tax_computation_by_pan(client_pan)
-    if existing_comp and existing_comp.is_ca_approved and derived["validation_status"] == "READY":
-        result.ca_sign_off_status = "CA_APPROVED"
-        result.ca_approver = existing_comp.ca_approver or "Approved Chartered Accountant"
-        result.verification_hash = existing_comp.ca_sign_off_hash
-        result.ca_notes = existing_comp.ca_notes
-        result.ca_approval_timestamp = (
-            existing_comp.approved_at.isoformat() if existing_comp.approved_at else None
-        )
+    if existing_comp:
+        if existing_comp.selected_itr_form:
+            result.selected_itr_form = existing_comp.selected_itr_form
+        if existing_comp.ca_review_status == "RETURNED_FOR_CORRECTION":
+            result.ca_sign_off_status = "RETURNED_FOR_CORRECTION"
+            result.ca_return_reason = existing_comp.ca_return_reason
+            result.ca_approver = existing_comp.ca_approver
+            result.ca_notes = existing_comp.ca_notes
+        elif existing_comp.ca_review_status == "REJECTED":
+            result.ca_sign_off_status = "REJECTED"
+            result.ca_return_reason = existing_comp.ca_return_reason
+            result.ca_approver = existing_comp.ca_approver
+            result.ca_notes = existing_comp.ca_notes
+        elif existing_comp.is_ca_approved and derived["validation_status"] == "READY":
+            result.ca_sign_off_status = "CA_APPROVED"
+            result.ca_approver = existing_comp.ca_approver or "Approved Chartered Accountant"
+            result.verification_hash = existing_comp.ca_sign_off_hash
+            result.ca_notes = existing_comp.ca_notes
+            result.ca_approval_timestamp = (
+                existing_comp.approved_at.isoformat() if existing_comp.approved_at else None
+            )
+        else:
+            chosen = result.new_regime if result.recommended_regime == TaxRegimeEnum.NEW_REGIME_115BAC else result.old_regime
+            repo.save_tax_computation(
+                pan=client_pan,
+                computation_data={
+                    "client_id": client_id,
+                    "case_id": case_id,
+                    "ay": assessment_year,
+                    "gross_total_income": derived["income"].gross_total_income,
+                    "old_regime_tax": result.old_regime.total_tax_liability,
+                    "new_regime_tax": result.new_regime.total_tax_liability,
+                    "recommended_regime": result.recommended_regime.value,
+                    "tds_credits": derived["prepaid_tax"] + derived["advance_tax"],
+                    "refund_due": chosen.refund_amount,
+                    "balance_payable": chosen.tax_due_amount,
+                    "data_source": "VALIDATED_BACKEND_DOCUMENTS",
+                    "validation_status": derived["validation_status"],
+                    "validation_gate": derived["validation_gate"],
+                    "details": {
+                        "income_summary": derived["income_summary"],
+                        "deductions_summary": derived["deductions_summary"],
+                        "new_regime": result.new_regime.model_dump(),
+                        "old_regime": result.old_regime.model_dump(),
+                    },
+                    "is_ca_approved": False,
+                },
+            )
     else:
         chosen = result.new_regime if result.recommended_regime == TaxRegimeEnum.NEW_REGIME_115BAC else result.old_regime
         repo.save_tax_computation(
@@ -321,6 +371,122 @@ def sign_off_client_case(
         "chosen_regime": req.chosen_regime.value,
         "ca_notes": req.verification_notes,
         "message": f"Case for {client.name} approved by {approver_label}.",
+    }
+
+
+@router.post("/client/{client_id}/return-for-correction")
+def return_client_case_for_correction(
+    client_id: str,
+    req: CAReturnForCorrectionRequest,
+    actor: ActorContext = Depends(require_authenticated_actor),
+    db: Session = Depends(get_db),
+):
+    """Authorised CA action to return case for correction with mandatory remarks."""
+    if not req.reason or not req.reason.strip():
+        raise HTTPException(status_code=400, detail="Mandatory reason required to return case for correction.")
+
+    client = case_manager.get_client_by_id(client_id)
+    assert_client_case_access(
+        actor,
+        target_client_id=client.id if client else client_id,
+        target_case_id=req.case_id,
+        require_ca_role=True,
+    )
+    if not client:
+        raise HTTPException(status_code=404, detail=f"Client {client_id} not found.")
+
+    approver_label = f"{actor.actor_name} ({actor.role})"
+    repo = TaxpayerRepository(db)
+    repo.return_tax_computation_for_correction(
+        pan=client.pan,
+        ca_actor=approver_label,
+        reason=req.reason.strip(),
+        client_id=client.id,
+    )
+
+    client.workflow_status = "RETURNED_FOR_CORRECTION"
+    details = f"Case returned for correction by CA: {req.reason.strip()}"
+    repo.add_audit_log(
+        actor=approver_label,
+        action="CA_RETURNED_FOR_CORRECTION",
+        details=details,
+        client_name=client.name,
+        pan=client.pan,
+        category="CA Review",
+    )
+    case_manager.log_event(
+        actor=approver_label,
+        action="CA_RETURNED_FOR_CORRECTION",
+        details=details,
+        pan=client.pan,
+    )
+
+    return {
+        "status": "RETURNED_FOR_CORRECTION",
+        "client_id": client.id,
+        "case_id": req.case_id,
+        "reason": req.reason.strip(),
+        "returned_by": approver_label,
+        "returned_at": datetime.now(timezone.utc).isoformat(),
+        "message": f"Case returned for correction to {client.name} with mandatory audit notes.",
+    }
+
+
+@router.post("/client/{client_id}/reject")
+def reject_client_case_computation(
+    client_id: str,
+    req: CARejectComputationRequest,
+    actor: ActorContext = Depends(require_authenticated_actor),
+    db: Session = Depends(get_db),
+):
+    """Authorised CA action to reject computation with mandatory remarks."""
+    if not req.reason or not req.reason.strip():
+        raise HTTPException(status_code=400, detail="Mandatory reason required to reject tax computation.")
+
+    client = case_manager.get_client_by_id(client_id)
+    assert_client_case_access(
+        actor,
+        target_client_id=client.id if client else client_id,
+        target_case_id=req.case_id,
+        require_ca_role=True,
+    )
+    if not client:
+        raise HTTPException(status_code=404, detail=f"Client {client_id} not found.")
+
+    approver_label = f"{actor.actor_name} ({actor.role})"
+    repo = TaxpayerRepository(db)
+    repo.reject_tax_computation(
+        pan=client.pan,
+        ca_rejector=approver_label,
+        reason=req.reason.strip(),
+        client_id=client.id,
+    )
+
+    client.workflow_status = "REJECTED"
+    details = f"Tax computation rejected by CA: {req.reason.strip()}"
+    repo.add_audit_log(
+        actor=approver_label,
+        action="CA_COMPUTATION_REJECTED",
+        details=details,
+        client_name=client.name,
+        pan=client.pan,
+        category="CA Review",
+    )
+    case_manager.log_event(
+        actor=approver_label,
+        action="CA_COMPUTATION_REJECTED",
+        details=details,
+        pan=client.pan,
+    )
+
+    return {
+        "status": "REJECTED",
+        "client_id": client.id,
+        "case_id": req.case_id,
+        "reason": req.reason.strip(),
+        "rejected_by": approver_label,
+        "rejected_at": datetime.now(timezone.utc).isoformat(),
+        "message": f"Computation rejected by CA for {client.name}.",
     }
 
 

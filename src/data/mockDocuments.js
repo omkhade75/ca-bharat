@@ -1,8 +1,6 @@
 // Document Vault & Simulated AI Extraction Pipeline Dataset
 // Compliant with DPDP Act, 2023 in-memory ephemeral parsing
 
-export const INITIAL_DOCUMENTS = []
-
 export const SAMPLE_STATUTORY_DOCUMENTS = [
   // --- Client 1: Arun Kumar Verma (cli-001) - Individual Salaried (4 Docs) ---
   {
@@ -188,3 +186,6 @@ export const SAMPLE_STATUTORY_DOCUMENTS = [
     },
   },
 ]
+
+export const INITIAL_DOCUMENTS = SAMPLE_STATUTORY_DOCUMENTS
+

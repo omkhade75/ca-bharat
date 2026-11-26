@@ -141,6 +141,11 @@ def _run_migrations(engine):
             ("validation_status", "VARCHAR(32) DEFAULT 'READY'"),
             ("validation_gate_json", "TEXT"),
             ("ca_approver", "VARCHAR(128)"),
+            ("selected_itr_form", "VARCHAR(32) DEFAULT 'ITR-1'"),
+            ("itr_selection_json", "TEXT"),
+            ("filing_package_json", "TEXT"),
+            ("ca_review_status", "VARCHAR(32) DEFAULT 'PENDING_CA_REVIEW'"),
+            ("ca_return_reason", "TEXT"),
         ]
         with engine.begin() as conn:
             for col_name, col_type in cols_to_add:
@@ -175,11 +180,28 @@ def _run_migrations(engine):
                     except Exception as e:
                         print(f"Migration note for taxpayer_profiles.{col_name}: {e}")
 
+def _backup_database_if_sqlite():
+    """Takes a pre-migration timestamped backup copy of SQLite database file if it exists."""
+    db_url = get_database_url()
+    if db_url.startswith("sqlite"):
+        db_path = db_url.replace("sqlite:///", "").replace("sqlite://", "")
+        if os.path.exists(db_path):
+            try:
+                import shutil
+                import time
+                backup_path = f"{db_path}.pre_migration_{int(time.time())}.bak"
+                shutil.copy2(db_path, backup_path)
+                print(f"[DB Safety] Pre-migration SQLite backup created at {backup_path}")
+            except Exception as e:
+                print(f"[DB Safety] Warning during pre-migration backup: {e}")
+
+
 def init_db():
-    """Initializes all database tables and runs initial statutory seed if empty"""
+    """Initializes all database tables, backs up SQLite file, runs migrations, and seeds if empty"""
     from . import models
     Base.metadata.create_all(bind=engine)
     try:
+        _backup_database_if_sqlite()
         _run_migrations(engine)
     except Exception as e:
         print(f"Warning during DB migrations: {e}")

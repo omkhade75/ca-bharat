@@ -37,9 +37,17 @@ def is_production_env() -> bool:
 
 
 def is_prototype_auth_enabled() -> bool:
-    """Prototype credential token issuance is enabled ONLY outside production."""
+    """
+    Session token issuance against server-side credential directory:
+    - Enabled in non-production environments when ALLOW_PROTOTYPE_AUTH=true (default: true).
+    - In production/Render, enabled ONLY when explicit ENABLE_LEADERSHIP_DEMO_AUTH=true is set
+      for leadership demonstration access.
+    - Public/anonymous token generation is never permitted; callers must authenticate
+      against the server-side directory.
+    """
     if is_production_env():
-        return False
+        demo_flag = os.getenv("ENABLE_LEADERSHIP_DEMO_AUTH", "false").strip().lower()
+        return demo_flag == "true"
     flag = os.getenv("ALLOW_PROTOTYPE_AUTH", "true").strip().lower()
     return flag == "true"
 
@@ -70,10 +78,33 @@ def _hash_secret(raw: str) -> str:
 
 
 def _get_prototype_directory() -> Dict[str, Dict[str, Any]]:
-    partner_secret = os.getenv("DEV_CA_PARTNER_SECRET", "DemoPartner!2026")
-    staff_secret = os.getenv("DEV_CA_STAFF_SECRET", "DemoStaff!2026")
-    arun_secret = os.getenv("DEV_CLIENT_ARUN_SECRET", "DemoArun!2026")
-    radhika_secret = os.getenv("DEV_CLIENT_RADHIKA_SECRET", "DemoRadhika!2026")
+    # Credentials are read from Render / system environment variables
+    partner_secret = os.getenv("LEADERSHIP_DEMO_PARTNER_SECRET") or os.getenv("DEV_CA_PARTNER_SECRET", "DemoPartner!2026")
+    staff_secret = os.getenv("LEADERSHIP_DEMO_STAFF_SECRET") or os.getenv("DEV_CA_STAFF_SECRET", "DemoStaff!2026")
+    arun_secret = os.getenv("LEADERSHIP_DEMO_ARUN_SECRET") or os.getenv("DEV_CLIENT_ARUN_SECRET", "DemoArun!2026")
+    radhika_secret = os.getenv("LEADERSHIP_DEMO_RADHIKA_SECRET") or os.getenv("DEV_CLIENT_RADHIKA_SECRET", "DemoRadhika!2026")
+
+    # Bounded strictly to synthetic demonstration customers only
+    synthetic_demo_client_ids = [
+        "client-arun-01",
+        "client-radhika-02",
+        "client-shree-03",
+        "client-kavita-04",
+        "cli-001",
+        "cli-002",
+        "cli-003",
+        "cli-004",
+    ]
+    synthetic_demo_case_ids = [
+        "case-arun-ay2526",
+        "case-radhika-ay2526",
+        "case-shree-ay2526",
+        "case-kavita-ay2526",
+        "CASE-2025-001",
+        "CASE-2025-002",
+        "CASE-2025-003",
+        "CASE-2025-004",
+    ]
 
     return {
         "ca.partner@cabharat.demo": {
@@ -81,7 +112,7 @@ def _get_prototype_directory() -> Dict[str, Dict[str, Any]]:
             "actor_name": "CA Rajesh Sharma (Partner)",
             "role": "CA_PARTNER",
             "secret_hash": _hash_secret(partner_secret),
-            "assigned_client_ids": [],  # Unscoped partner access across firm clients
+            "assigned_client_ids": [],  # Firm-wide partner administrative access across firm clients & onboarding
             "allowed_case_ids": [],
         },
         "ca.staff@cabharat.demo": {

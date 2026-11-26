@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Users,
   UserPlus,
@@ -69,6 +70,15 @@ export default function FirmClientsModule() {
   const [selectedClientForDiscovery, setSelectedClientForDiscovery] = useState(null)
   const [isAddTeamMemberOpen, setIsAddTeamMemberOpen] = useState(false)
   const [copiedConsentId, setCopiedConsentId] = useState(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'add' || searchParams.get('action') === 'new') {
+      setIsAddClientOpen(true)
+      searchParams.delete('action')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   // Edit form state
   const [editFormData, setEditFormData] = useState({

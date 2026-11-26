@@ -94,3 +94,8 @@ class RegimeComparisonResult(BaseModel):
     validation_gate: Dict[str, Any] = Field(default_factory=dict)
     income_summary: Dict[str, Any] = Field(default_factory=dict)
     deductions_summary: Dict[str, Any] = Field(default_factory=dict)
+    selected_itr_form: str = "ITR-1 (Sahaj)"
+    missing_information_flags: List[str] = Field(default_factory=list)
+    ca_return_reason: Optional[str] = None
+    regime_comparison_reason: str = ""
+    calculation_breakdown: Dict[str, Any] = Field(default_factory=dict)
