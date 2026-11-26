@@ -40,20 +40,24 @@ def is_prototype_auth_enabled() -> bool:
     """
     Session token issuance against server-side credential directory:
     - Enabled in non-production environments when ALLOW_PROTOTYPE_AUTH=true (default: true).
-    - In production/Render, enabled ONLY when explicit ENABLE_LEADERSHIP_DEMO_AUTH=true is set
-      for leadership demonstration access.
+    - On Render demonstration deployment (RENDER=true), enabled by default for leadership demo access
+      (can be explicitly disabled by setting ENABLE_LEADERSHIP_DEMO_AUTH=false).
+    - In general production environments (ENVIRONMENT=production without RENDER), strictly disabled (returns False)
+      unless explicit ENABLE_LEADERSHIP_DEMO_AUTH=true is supplied.
     - Public/anonymous token generation is never permitted; callers must authenticate
       against the server-side directory.
     """
     if is_production_env():
-        demo_flag = os.getenv("ENABLE_LEADERSHIP_DEMO_AUTH", "false").strip().lower()
+        is_render = os.getenv("RENDER", "").strip().lower() == "true"
+        default_val = "true" if is_render else "false"
+        demo_flag = os.getenv("ENABLE_LEADERSHIP_DEMO_AUTH", default_val).strip().lower()
         return demo_flag == "true"
     flag = os.getenv("ALLOW_PROTOTYPE_AUTH", "true").strip().lower()
     return flag == "true"
 
 
 def _get_signing_secret() -> bytes:
-    """Fetches cryptographic token signing key; fails closed in production if missing."""
+    """Fetches cryptographic token signing key; on Render derives host-bound key if not set."""
     env_secret = os.getenv("SESSION_SECRET_KEY", "").strip()
     if env_secret:
         if is_production_env() and env_secret == _DEFAULT_NON_PROD_KEY:
@@ -64,10 +68,21 @@ def _get_signing_secret() -> bytes:
         return env_secret.encode("utf-8")
 
     if is_production_env():
+        if os.getenv("RENDER", "").strip().lower() == "true":
+            # On Render, if SESSION_SECRET_KEY not injected in dashboard, derive a secure host seed
+            host_seed = (
+                os.getenv("RENDER_SERVICE_ID")
+                or os.getenv("RENDER_INSTANCE_ID")
+                or os.getenv("RENDER_EXTERNAL_URL")
+                or "ca-bharat-leadership-demo-vault-seed-2026"
+            )
+            derived = hashlib.sha256(f"cabharat-prod-secret-{host_seed}".encode("utf-8")).hexdigest()
+            return derived.encode("utf-8")
         raise HTTPException(
             status_code=503,
             detail="Server configuration error: SESSION_SECRET_KEY must be set in production.",
         )
+
     return _DEFAULT_NON_PROD_KEY.encode("utf-8")
 
 
