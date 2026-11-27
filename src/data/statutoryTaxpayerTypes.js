@@ -70,22 +70,28 @@ export const LEGAL_TAXPAYER_ENTITIES = [
 // ============================================================================
 export const INDIVIDUAL_OCCUPATION_PROFILES = [
   {
+    id: 'MULTI_INCOME_UNSURE',
+    label: 'Multiple Income Streams / Don\'t Know',
+    description: 'Salary, business, stocks, rental properties, directorship, or unsure of exact ITR form.',
+    defaultRecommendedItr: 'Auto-Detect via AI Engine (Rule 12)',
+  },
+  {
     id: 'SALARIED',
-    label: 'Salaried',
+    label: 'Salaried Employee',
     description: 'Income predominantly from employment, pension, and employer allowances.',
-    defaultRecommendedItr: 'ITR-1 (Sahaj)',
+    defaultRecommendedItr: 'ITR-1 / ITR-2 (Auto-Evaluated)',
   },
   {
     id: 'PROFESSIONAL',
-    label: 'Professional',
+    label: 'Professional / Consultant',
     description: 'Independent doctor, lawyer, CA, engineer, consultant, architect, or IT freelancer.',
-    defaultRecommendedItr: 'ITR-3 / ITR-4 (Subject to CA Review)',
+    defaultRecommendedItr: 'ITR-3 / ITR-4 (Presumptive / Regular)',
   },
   {
     id: 'BUSINESS_OWNER',
     label: 'Business Owner / Proprietor',
     description: 'Trading, manufacturing, retail, or agency business under sole proprietorship.',
-    defaultRecommendedItr: 'ITR-3 / ITR-4 (Subject to CA Review)',
+    defaultRecommendedItr: 'ITR-3 / ITR-4 (Presumptive / Regular)',
   },
   {
     id: 'TRADER_INVESTOR',
@@ -97,13 +103,13 @@ export const INDIVIDUAL_OCCUPATION_PROFILES = [
     id: 'PENSIONER',
     label: 'Pensioner / Senior Citizen',
     description: 'Retired individual with superannuation pension and investment interest.',
-    defaultRecommendedItr: 'ITR-1 (Sahaj)',
+    defaultRecommendedItr: 'ITR-1 / ITR-2',
   },
   {
     id: 'OTHER',
     label: 'Other Income Earner',
     description: 'Individual with rental income, family pension, or miscellaneous sources.',
-    defaultRecommendedItr: 'ITR-2',
+    defaultRecommendedItr: 'ITR-2 / Auto-Evaluated',
   },
 ]
 

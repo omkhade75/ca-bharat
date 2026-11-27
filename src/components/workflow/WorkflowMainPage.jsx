@@ -14,6 +14,7 @@ import {
   User,
   X,
   Sparkles,
+  Upload,
 } from 'lucide-react'
 import { AppContext } from '../../context/AppContext'
 import { LogoMark } from '../common/Logo'
@@ -266,6 +267,19 @@ export default function WorkflowMainPage() {
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveClientId(client.id)
+                          setShowCustomersModal(false)
+                          navigate('/document-intelligence')
+                        }}
+                        title={`Upload documents for ${client.name}`}
+                        className="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-semibold text-xs flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Upload Docs</span>
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleSelectCustomer(client.id)}

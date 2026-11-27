@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import {
   Users,
   UserPlus,
@@ -18,6 +18,7 @@ import {
   RefreshCw,
   AlertCircle,
   Info,
+  Upload,
 } from 'lucide-react'
 import { useApp } from '../../../context/AppContext'
 import { formatDate } from '../../../utils/formatters'
@@ -578,6 +579,15 @@ export default function FirmClientsModule() {
                                 {client.docsUploaded >= client.docsRequired ? (
                                   <CheckCircle2 className="w-3 h-3 text-teal-600" />
                                 ) : null}
+                                <Link
+                                  to="/document-intelligence"
+                                  onClick={() => setActiveClientId(client.id)}
+                                  title={`Upload documents for ${client.name}`}
+                                  className="ml-1 inline-flex items-center gap-0.5 text-[10px] font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                                >
+                                  <Upload className="w-2.5 h-2.5" />
+                                  <span>Upload</span>
+                                </Link>
                               </div>
                             </td>
 
@@ -587,6 +597,15 @@ export default function FirmClientsModule() {
 
                             <td className="py-3 px-4 text-right">
                               <div className="flex items-center justify-end gap-1.5">
+                                <Link
+                                  to="/document-intelligence"
+                                  onClick={() => setActiveClientId(client.id)}
+                                  title={`Step 03 & 04: Upload & Process Tax Documents for ${client.name}`}
+                                  className="px-2.5 py-1 text-[11px] font-semibold rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                                >
+                                  <Upload className="w-3 h-3 text-blue-600" />
+                                  <span>Upload Docs</span>
+                                </Link>
                                 <button
                                   onClick={() => {
                                     setSelectedClientForDiscovery(client)
@@ -917,9 +936,15 @@ export default function FirmClientsModule() {
               {/* Conditional Employment/Occupation Profile for Individuals */}
               {formData.legalType === 'INDIVIDUAL' ? (
                 <div>
-                  <label className="block font-bold text-slate-800 mb-1">
-                    Occupation / Income Profile *
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-800">
+                      Occupation / Income Profile *
+                    </label>
+                    <span className="text-[10px] text-teal-700 font-semibold flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5" />
+                      Rule 12 Auto-Engine
+                    </span>
+                  </div>
                   <select
                     value={formData.occupationProfile}
                     onChange={(e) => setFormData({ ...formData, occupationProfile: e.target.value })}
@@ -931,9 +956,12 @@ export default function FirmClientsModule() {
                       </option>
                     ))}
                   </select>
-                  <p className="text-[10.5px] text-slate-500 mt-1">
-                    * Section 44AD/44ADA are evaluated as tax attributes in discovery, not entity types.
-                  </p>
+                  <div className="mt-1.5 p-2 rounded-lg bg-teal-50/70 border border-teal-200/60 text-[11px] text-teal-900 flex items-start gap-1.5 leading-snug">
+                    <Info className="w-3.5 h-3.5 text-teal-700 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Don't know which ITR form applies?</strong> Select <em>"Multiple Income Streams / Don't Know"</em>. CA Bharat AI will automatically analyze the client's salary, business, stocks, rentals, and directorships in Stage 6 to decide the exact legal ITR form under CBDT Rule 12.
+                    </span>
+                  </div>
                 </div>
               ) : (
                 <div>
