@@ -67,10 +67,10 @@ class FilingPreparationService:
         assessment_year: str = "2025-26",
     ) -> FilingPreparationPackage:
         client_id = client_dict.get("id") or client_dict.get("client_id", "")
-        pan = (client_dict.get("pan") or "ABCPA1092F").upper()
-        name = client_dict.get("name") or "Arun Kumar Verma"
-        name_parts = name.strip().split(" ")
-        first_name = name_parts[0]
+        pan = (client_dict.get("pan") or "").upper()
+        name = (client_dict.get("name") or "Taxpayer").strip() or "Taxpayer"
+        name_parts = [p for p in name.split(" ") if p]
+        first_name = name_parts[0] if name_parts else "Taxpayer"
         last_name = name_parts[-1] if len(name_parts) > 1 else first_name
         middle_name = " ".join(name_parts[1:-1]) if len(name_parts) > 2 else ""
 
@@ -79,7 +79,7 @@ class FilingPreparationService:
         approved_at = tax_comp_dict.get("ca_approval_timestamp") or tax_comp_dict.get("approved_at")
         v_hash = tax_comp_dict.get("verification_hash") or tax_comp_dict.get("ca_sign_off_hash") or ""
 
-        # Extract income & deduction summaries
+        # Extract income & deduction summaries without injecting unrelated demo figures
         inc = tax_comp_dict.get("income_summary", {}) or {}
         ded = tax_comp_dict.get("deductions_summary", {}) or {}
         rec_regime = tax_comp_dict.get("recommended_regime", "New Regime")
@@ -89,25 +89,34 @@ class FilingPreparationService:
         old_reg = tax_comp_dict.get("old_regime", {}) or {}
         chosen_reg = new_reg if is_new_regime else old_reg
 
-        # Extract values
-        gross_salary = float(inc.get("salary") or inc.get("income_salaries") or 1450000.0)
-        std_ded = float(chosen_reg.get("total_deductions") or 75000.0) if is_new_regime else float(ded.get("standard_deduction") or 50000.0)
+        raw_salary = inc.get("salary")
+        if raw_salary is None:
+            raw_salary = inc.get("income_salaries")
+        gross_salary = float(raw_salary if raw_salary is not None else 0.0)
+
+        if is_new_regime:
+            raw_std = chosen_reg.get("total_deductions")
+            std_ded = float(raw_std if raw_std is not None else (min(gross_salary, 75000.0) if gross_salary > 0 else 0.0))
+        else:
+            raw_std = ded.get("standard_deduction")
+            std_ded = float(raw_std if raw_std is not None else (min(gross_salary, 50000.0) if gross_salary > 0 else 0.0))
         pt = float(ded.get("professional_tax") or 0.0) if not is_new_regime else 0.0
         income_from_salary = max(0.0, gross_salary - std_ded - pt)
 
-        income_hp = float(inc.get("house_property") or inc.get("income_house_property") or 0.0)
-        income_pgbp = float(inc.get("pgbp") or inc.get("income_pgbp") or 0.0)
-        income_cg = float(inc.get("capital_gains") or inc.get("total_capital_gains") or 0.0)
+        income_hp = float(inc.get("house_property") if inc.get("house_property") is not None else (inc.get("income_house_property") or 0.0))
+        income_pgbp = float(inc.get("pgbp") if inc.get("pgbp") is not None else (inc.get("income_pgbp") or 0.0))
+        income_cg = float(inc.get("capital_gains") if inc.get("capital_gains") is not None else (inc.get("total_capital_gains") or 0.0))
 
         savings_interest = float(inc.get("savings_interest") or 0.0)
         dividend_income = float(inc.get("dividend_income") or 0.0)
-        other_sources_misc = float(inc.get("other_sources") or inc.get("total_other_sources") or 0.0)
+        other_sources_misc = float(inc.get("other_sources") if inc.get("other_sources") is not None else (inc.get("total_other_sources") or 0.0))
         total_other_sources = max(other_sources_misc, savings_interest + dividend_income)
 
         # Statutory Gross Total Income (Section 14: sum of net income under 5 heads)
         gti = income_from_salary + income_hp + income_pgbp + income_cg + total_other_sources
         total_via = float(chosen_reg.get("total_deductions") or 0.0) if not is_new_regime else 0.0
-        taxable_income = float(chosen_reg.get("total_taxable_income") or max(0.0, gti - total_via))
+        raw_taxable = chosen_reg.get("total_taxable_income")
+        taxable_income = float(raw_taxable if raw_taxable is not None else max(0.0, gti - total_via))
 
         basic_tax = float(chosen_reg.get("basic_tax") or 0.0)
         rebate_87a = float(chosen_reg.get("rebate_87a") or 0.0)
@@ -115,27 +124,34 @@ class FilingPreparationService:
         cess = float(chosen_reg.get("health_and_education_cess") or 0.0)
         total_tax_liability = float(chosen_reg.get("total_tax_liability") or 0.0)
 
-        tds_credit = float(tax_comp_dict.get("tds_credits") or chosen_reg.get("tds_tcs_credit") or 0.0)
+        raw_tds = tax_comp_dict.get("tds_credits")
+        if raw_tds is None:
+            raw_tds = chosen_reg.get("tds_tcs_credit")
+        tds_credit = float(raw_tds if raw_tds is not None else 0.0)
         advance_tax = float(chosen_reg.get("advance_tax_paid") or 0.0)
-        total_prepaid = float(chosen_reg.get("total_prepaid_tax") or (tds_credit + advance_tax))
+        raw_prepaid = chosen_reg.get("total_prepaid_tax")
+        total_prepaid = float(raw_prepaid if raw_prepaid is not None else (tds_credit + advance_tax))
         # Net Tax / Refund (Strictly rounded to nearest multiple of ₹10 per Section 288B)
-        raw_refund = float(chosen_reg.get("refund_amount") or (total_prepaid - total_tax_liability if total_prepaid > total_tax_liability else 0.0))
+        raw_refund = float(chosen_reg.get("refund_amount") if chosen_reg.get("refund_amount") is not None else (total_prepaid - total_tax_liability if total_prepaid > total_tax_liability else 0.0))
         refund_amount = float(round(raw_refund / 10.0) * 10) if raw_refund > 0 else 0.0
 
-        raw_tax_due = float(chosen_reg.get("tax_due_amount") or (total_tax_liability - total_prepaid if total_tax_liability > total_prepaid else 0.0))
+        raw_tax_due = float(chosen_reg.get("tax_due_amount") if chosen_reg.get("tax_due_amount") is not None else (total_tax_liability - total_prepaid if total_tax_liability > total_prepaid else 0.0))
         tax_due = float(round(raw_tax_due / 10.0) * 10) if raw_tax_due > 0 else 0.0
 
         # Selected ITR form
-        selected_itr_form = tax_comp_dict.get("selected_itr_form") or "ITR-1 (Sahaj)"
+        selected_itr_form = tax_comp_dict.get("selected_itr_form") or client_dict.get("selected_itr_form") or client_dict.get("recommended_itr") or "ITR-1 (Sahaj)"
         form_short = selected_itr_form.split(" ")[0].upper()
 
         bank = client_dict.get("bank_details") or {
-            "bank_name": "HDFC Bank Ltd",
-            "ifsc_code": "HDFC0000060",
-            "account_number": "50100294819281",
-            "account_type": "SAV",
+            "bank_name": "Pending Client Bank Mandate",
+            "ifsc_code": "SBIN0000001",
+            "account_number": "PENDING_MANDATE",
+            "account_type": "SAVINGS",
             "refund_flag": "YES",
         }
+
+        email_val = str(client_dict.get("email") or "").strip()
+        mobile_val = str(client_dict.get("phone") or client_dict.get("mobile") or "").strip()
 
         # ----------------------------------------------------------------------
         # Statutory Schedules Mapping
@@ -149,8 +165,8 @@ class FilingPreparationService:
                     "PAN": pan,
                     "ResidentialStatus": client_dict.get("residential_status", "RESIDENT"),
                     "EmployerCategory": "OTH",
-                    "Email": client_dict.get("email", "arun.verma@demo.in"),
-                    "MobileNo": client_dict.get("phone", "+91 98200 12345"),
+                    "Email": email_val,
+                    "MobileNo": mobile_val,
                 },
                 "FilingStatus": {
                     "ReturnFileSec": "11",  # Section 139(1) - On or before due date
@@ -162,8 +178,8 @@ class FilingPreparationService:
             "Schedule_S": {
                 "ScheduleName": "Schedule Salary (Section 15 to 17)",
                 "GrossSalary": gross_salary,
-                "SalaryUnderSec17_1": gross_salary - 35000.0 if gross_salary > 35000 else gross_salary,
-                "PerquisitesUnderSec17_2": 35000.0 if gross_salary > 35000 else 0.0,
+                "SalaryUnderSec17_1": gross_salary,
+                "PerquisitesUnderSec17_2": 0.0,
                 "ProfitsInLieuSec17_3": 0.0,
                 "DeductionUnderSec16": std_ded + pt,
                 "StandardDeductionSec16ia": std_ded,
@@ -188,19 +204,19 @@ class FilingPreparationService:
             },
             "Schedule_OS": {
                 "ScheduleName": "Schedule Income from Other Sources (Section 56 to 59)",
-                "SavingsBankInterest": savings_interest or 18450.0,
-                "DividendIncome": dividend_income or 4200.0,
-                "OtherInterestAndIncome": max(0.0, total_other_sources - (savings_interest or 18450.0) - (dividend_income or 4200.0)),
+                "SavingsBankInterest": savings_interest,
+                "DividendIncome": dividend_income,
+                "OtherInterestAndIncome": max(0.0, total_other_sources - savings_interest - dividend_income),
                 "DeductionsUnderSec57": 0.0,
                 "TotalIncomeOtherSources": total_other_sources,
             },
             "Schedule_VIA": {
                 "ScheduleName": "Schedule Chapter VI-A Deductions",
                 "ApplicableRegime": "Old Regime Only" if not is_new_regime else "Disallowed u/s 115BAC(2)",
-                "Sec80C": float(ded.get("sec_80c") or (150000.0 if not is_new_regime else 0.0)),
-                "Sec80CCD_1B": float(ded.get("sec_80ccd_1b_nps") or (50000.0 if not is_new_regime else 0.0)),
-                "Sec80D": float(ded.get("sec_80d_health") or (25000.0 if not is_new_regime else 0.0)),
-                "Sec80TTA": min(savings_interest or 18450.0, 10000.0) if not is_new_regime else 0.0,
+                "Sec80C": float(ded.get("sec_80c") or 0.0) if not is_new_regime else 0.0,
+                "Sec80CCD_1B": float(ded.get("sec_80ccd_1b_nps") or 0.0) if not is_new_regime else 0.0,
+                "Sec80D": float(ded.get("sec_80d_health") or 0.0) if not is_new_regime else 0.0,
+                "Sec80TTA": float(ded.get("sec_80tta_ttb_interest") or min(savings_interest, 10000.0)) if not is_new_regime else 0.0,
                 "TotalChapterVIADeductions": total_via,
             },
             "Schedule_TaxesPaid": {
@@ -230,10 +246,10 @@ class FilingPreparationService:
             },
             "Verification": {
                 "AssesseeName": name,
-                "FatherName": "Ramesh Kumar Verma",
+                "FatherName": client_dict.get("karta_name") or "Per PAN Database Record",
                 "AssesseePAN": pan,
                 "Capacity": "Self",
-                "Place": "Bengaluru",
+                "Place": "India",
                 "VerificationDate": datetime.now().strftime("%Y-%m-%d"),
                 "CA_SignOff": {
                     "IsCAApproved": is_ca_approved,
@@ -249,7 +265,11 @@ class FilingPreparationService:
         # Structured JSON Filing Payload
         # ----------------------------------------------------------------------
         now_date = datetime.now().strftime("%Y-%m-%d")
-        itr_root_key = "ITR1" if "ITR-1" in form_short else ("ITR4" if "ITR-4" in form_short else "ITR2")
+        itr_root_key = (
+            "ITR4"
+            if "ITR-4" in form_short
+            else ("ITR3" if "ITR-3" in form_short else ("ITR2" if "ITR-2" in form_short else "ITR1"))
+        )
 
         itr_json_payload = {
             "ITR": {
@@ -400,7 +420,10 @@ class FilingPreparationService:
         # 8. Demographic Contact Info
         checks_run += 1
         pers = schedules.get("PartA_GEN", {}).get("PersonalInfo", {})
-        if not pers.get("Email") or "@" not in pers.get("Email", ""):
+        email_str = str(pers.get("Email") or "").strip()
+        if not email_str:
+            warnings.append("Taxpayer primary email address not entered during onboarding.")
+        elif "@" not in email_str:
             errors.append("Invalid primary contact email address in Part A General.")
         if not pers.get("MobileNo"):
             warnings.append("Taxpayer mobile number missing in profile.")

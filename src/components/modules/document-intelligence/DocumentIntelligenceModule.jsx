@@ -74,6 +74,8 @@ export default function DocumentIntelligenceModule() {
     extractSingleDocument,
     correctDocumentField,
     verifyDocumentField,
+    ensureClientSynced,
+    runClientReconciliation,
   } = useApp()
 
   const [activeTab, setActiveTab] = useState('VAULT') // 'VAULT', 'CHECKLIST', 'EXTRACTED_REVIEW', 'HISTORY'
@@ -155,9 +157,10 @@ export default function DocumentIntelligenceModule() {
     }, 350)
 
     try {
+      const synced = ensureClientSynced ? await ensureClientSynced(activeClient) : { clientId: activeClient.id, caseId: resolveEffectiveCaseId() }
       const extractedDocs = await extractClientDocuments(
-        activeClient.id,
-        resolveEffectiveCaseId()
+        synced.clientId || activeClient.id,
+        synced.caseId || resolveEffectiveCaseId()
       )
       clearInterval(interval)
       setExtractionProgressStep(extractionSteps.length - 1)
@@ -275,19 +278,32 @@ export default function DocumentIntelligenceModule() {
     setIsUploading(true)
     setUploadError(null)
     setUploadSuccessMsg(null)
+    clearAuthError?.()
 
     try {
+      const synced = ensureClientSynced
+        ? await ensureClientSynced(activeClient)
+        : { clientId: activeClient.id, caseId: resolveEffectiveCaseId(), client: activeClient }
+
+      const effectiveClientId = synced.clientId || activeClient.id
+      const effectivePan = synced.client?.pan || activeClient.pan
+      const effectiveCaseId = synced.caseId || resolveEffectiveCaseId()
+
       const result = await apiClient.uploadDocumentVault({
         file,
-        clientId: activeClient.id,
-        clientPan: activeClient.pan,
-        caseId: resolveEffectiveCaseId(),
+        clientId: effectiveClientId,
+        clientPan: effectivePan,
+        caseId: effectiveCaseId,
         assessmentYear: effectiveAy,
         category: uploadCategoryTarget,
         checklistItemIds: uploadChecklistTarget,
       })
 
       addDocument(result)
+      if (result.processing_status === 'PARSED' && runClientReconciliation) {
+        const ayClean = String(effectiveAy || '2025-26').replace(/^AY\s*/i, '')
+        await runClientReconciliation(effectiveClientId, effectiveCaseId, ayClean).catch(() => null)
+      }
       setUploadSuccessMsg(
         `Uploaded and verified '${file.name}' (${result.category}) in backend private storage.`
       )
@@ -518,7 +534,7 @@ export default function DocumentIntelligenceModule() {
         </div>
       )}
 
-      {authError && (
+      {authError && authError !== uploadError && (
         <div role="alert" className="bg-rose-50 border border-rose-300 text-rose-800 px-4 py-3 rounded-xl text-xs flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -545,14 +561,25 @@ export default function DocumentIntelligenceModule() {
       )}
 
       {uploadError && (
-        <div className="bg-rose-50 border border-rose-300 text-rose-800 px-4 py-3 rounded-xl text-xs flex items-center justify-between">
+        <div role="alert" className="bg-rose-50 border border-rose-300 text-rose-800 px-4 py-3 rounded-xl text-xs flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
             <span>{uploadError}</span>
           </div>
-          <button onClick={() => setUploadError(null)} className="text-rose-600 hover:text-rose-900 cursor-pointer">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {uploadError.toLowerCase().includes('pan') && uploadError.toLowerCase().includes('invalid') && (
+              <button
+                type="button"
+                onClick={() => navigate('/firm-clients')}
+                className="px-2.5 py-1 rounded bg-rose-700 text-white font-semibold hover:bg-rose-800 cursor-pointer"
+              >
+                Update PAN in Directory
+              </button>
+            )}
+            <button onClick={() => setUploadError(null)} className="text-rose-600 hover:text-rose-900 cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 

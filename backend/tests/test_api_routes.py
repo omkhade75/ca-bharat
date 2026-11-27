@@ -87,3 +87,23 @@ def test_taxpayer_intake_workflow():
     assert updated_data["status"] == "SUCCESS"
     assert updated_data["intake_discovery"]["capitalGains"]["hasIncome"] == "YES"
 
+    # Restore clean seeded salaried state for downstream Arun ITR-1 integration tests
+    restore_res = client.put(
+        "/api/clients/ABCPA1092F/intake",
+        json={
+            "salary": {"hasIncome": "YES", "hasMultipleEmployers": "NO"},
+            "houseProperty": {"hasIncome": "NO"},
+            "businessProfession": {"hasIncome": "NO"},
+            "capitalGains": {"hasIncome": "NO"},
+            "otherSources": {"hasIncome": "YES", "hasDividends": "YES"},
+            "specialDisclosures": {
+                "hasDirectorship": "NO",
+                "holdsUnlistedShares": "NO",
+                "hasForeignAssetsOrIncome": "NO",
+                "hasAgriculturalIncome": "NO",
+                "hasCryptoOrVDA": "NO",
+            },
+        },
+    )
+    assert restore_res.status_code == 200
+

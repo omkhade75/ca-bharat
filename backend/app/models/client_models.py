@@ -20,6 +20,7 @@ class LegalTaxpayerTypeEnum(str, Enum):
 
 # 2. Individual Occupation & Employment Profiles
 class IndividualOccupationEnum(str, Enum):
+    MULTI_INCOME_UNSURE = "MULTI_INCOME_UNSURE"
     SALARIED = "SALARIED"
     PROFESSIONAL = "PROFESSIONAL"
     BUSINESS_OWNER = "BUSINESS_OWNER"

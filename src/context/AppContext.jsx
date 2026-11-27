@@ -138,21 +138,175 @@ export function AppProvider({ children }) {
     setAuditLogs((prev) => [newLog, ...prev])
   }
 
+  const PAN_FORMAT_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/
+
+  const buildBackendClientPayload = (clientObj) => {
+    const panClean = String(clientObj?.pan || '').trim().toUpperCase()
+    const legalTypeVal = clientObj?.legalType || 'INDIVIDUAL'
+    const occVal =
+      legalTypeVal === 'INDIVIDUAL'
+        ? clientObj?.occupationProfile || 'SALARIED'
+        : null
+    const rawItr = String(
+      clientObj?.itrType || clientObj?.recommended_itr || 'ITR-1'
+    ).trim()
+    const normalizedItr =
+      rawItr.length > 64 ? rawItr.slice(0, 64) : rawItr || 'ITR-1'
+    const tanClean = String(clientObj?.tan || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 10)
+    return {
+      id: clientObj.id,
+      pan: panClean,
+      name: String(clientObj?.name || 'Taxpayer').trim(),
+      legal_type: legalTypeVal,
+      occupation_profile: occVal,
+      residential_status: clientObj?.residentialStatus || 'RESIDENT',
+      category:
+        clientObj?.category ||
+        (legalTypeVal === 'INDIVIDUAL'
+          ? `Individual - ${occVal}`
+          : legalTypeVal),
+      recommended_itr: normalizedItr,
+      selected_itr_form: normalizedItr,
+      itr_form_type: normalizedItr,
+      dob_or_doi: clientObj?.dobOrDoi || null,
+      email: clientObj?.email ? String(clientObj.email).trim() : null,
+      mobile: clientObj?.phone ? String(clientObj.phone).trim().slice(0, 20) : null,
+      employer_or_trade_name: clientObj?.employer
+        ? String(clientObj.employer).trim().slice(0, 128)
+        : null,
+      tan: tanClean || null,
+      karta_name: clientObj?.kartaName || null,
+      karta_pan: clientObj?.kartaPan
+        ? String(clientObj.kartaPan).trim().toUpperCase().slice(0, 10)
+        : null,
+      huf_deed_date: clientObj?.hufDeedDate || null,
+      entity_reg_no: clientObj?.entityRegNo || null,
+      registered_office_address: clientObj?.registeredOffice || null,
+      responsible_person_name: clientObj?.responsiblePersonName || null,
+      responsible_person_pan: clientObj?.responsiblePersonPan
+        ? String(clientObj.responsiblePersonPan).trim().toUpperCase().slice(0, 10)
+        : null,
+      responsible_person_designation:
+        clientObj?.responsiblePersonDesignation || null,
+      intake_discovery: clientObj?.intakeDiscovery || DEFAULT_INTAKE_DISCOVERY,
+      advisory_tier: clientObj?.tier || 'Gold',
+      workflow_status: 'CONSENT_PENDING',
+    }
+  }
+
+  const ensureClientSynced = async (targetClient, forceSync = false) => {
+    const clientObj =
+      typeof targetClient === 'string'
+        ? clients.find((c) => c.id === targetClient)
+        : targetClient
+    if (!clientObj) {
+      throw new ApiError(404, 'No active taxpayer client selected.')
+    }
+    if (!apiClient.getAccessToken()) {
+      return { synced: false, clientId: clientObj.id, client: clientObj }
+    }
+    const existingCaseId = resolveBackendCaseId(
+      clientObj.id,
+      clientObj.activeAY || activeAy
+    )
+    if (clientObj.isBackendSynced && !forceSync) {
+      return {
+        synced: true,
+        clientId: clientObj.id,
+        caseId: existingCaseId,
+        client: clientObj,
+      }
+    }
+    const panUpper = String(clientObj.pan || '').trim().toUpperCase()
+    if (!PAN_FORMAT_REGEX.test(panUpper)) {
+      throw new ApiError(
+        400,
+        `Cannot sync client "${clientObj.name}": PAN "${clientObj.pan || 'empty'}" is invalid. Indian PAN must be 10 characters (5 letters, 4 digits, 1 letter — e.g. ABCDE1234F). Please update the PAN in Firm & Clients.`
+      )
+    }
+
+    const payload = buildBackendClientPayload({ ...clientObj, pan: panUpper })
+    const saved = await apiClient.onboardTaxpayer(payload)
+    const authoritativeId = saved?.id || clientObj.id
+    const resolvedCaseId = resolveBackendCaseId(
+      authoritativeId,
+      clientObj.activeAY || activeAy
+    )
+
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === clientObj.id || (c.pan || '').toUpperCase() === panUpper
+          ? {
+              ...c,
+              id: authoritativeId,
+              pan: panUpper,
+              isBackendSynced: true,
+            }
+          : c
+      )
+    )
+    setTaxCases((prev) =>
+      prev.map((tc) =>
+        tc.clientId === clientObj.id || (tc.pan || '').toUpperCase() === panUpper
+          ? {
+              ...tc,
+              clientId: authoritativeId,
+              pan: panUpper,
+              caseId:
+                tc.caseId?.startsWith('case-') && authoritativeId === clientObj.id
+                  ? tc.caseId
+                  : resolvedCaseId,
+            }
+          : tc
+      )
+    )
+    setDocuments((prev) =>
+      prev.map((d) =>
+        d.clientId === clientObj.id
+          ? { ...d, clientId: authoritativeId, caseId: resolvedCaseId }
+          : d
+      )
+    )
+    if (activeClientId === clientObj.id && authoritativeId !== clientObj.id) {
+      setActiveClientId(authoritativeId)
+    }
+
+    return {
+      synced: true,
+      clientId: authoritativeId,
+      caseId: resolvedCaseId,
+      client: { ...clientObj, id: authoritativeId, pan: panUpper, isBackendSynced: true },
+    }
+  }
+
   // Client Actions
-  const addClient = (clientData) => {
+  const addClient = async (clientData) => {
     const legalType = clientData.legalType || 'INDIVIDUAL'
     const occupationProfile = clientData.occupationProfile || 'SALARIED'
     const intakeDiscovery = clientData.intakeDiscovery || DEFAULT_INTAKE_DISCOVERY
     const recommendedItr = computeRecommendedItr(legalType, occupationProfile, intakeDiscovery)
-    const categoryDetails = getCategoryDetails(clientData.category || legalType)
-    
+    const panUpper = String(clientData.pan || '').trim().toUpperCase()
+    const cleanName = String(clientData.name || '').trim()
+
     // Generate dynamic document checklist
     const initialChecklist = generateDynamicChecklist({ ...clientData, legalType, occupationProfile }, intakeDiscovery)
     const mandatoryCount = initialChecklist.filter((c) => c.mandatory).length
 
-    const newId = `cli-${String(clients.length + 1).padStart(3, '0')}`
-    const newClient = {
+    const deterministicId = PAN_FORMAT_REGEX.test(panUpper)
+      ? `client-${panUpper.toLowerCase()}`
+      : `cli-${Date.now().toString(36)}`
+    let newId = deterministicId
+    let backendSynced = false
+
+    const newClientBase = {
+      ...clientData,
       id: newId,
+      name: cleanName,
+      pan: panUpper,
       status: 'Consent Pending',
       tier: clientData.tier || 'Gold',
       activeAY: activeAy,
@@ -174,12 +328,30 @@ export function AppProvider({ children }) {
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       intakeDiscovery,
       dynamicChecklist: initialChecklist,
-      ...clientData,
+      isBackendSynced: false,
     }
+
+    if (apiClient.getAccessToken() && PAN_FORMAT_REGEX.test(panUpper)) {
+      const savedBackend = await apiClient.onboardTaxpayer(
+        buildBackendClientPayload(newClientBase)
+      )
+      if (savedBackend?.id) {
+        newId = savedBackend.id
+        backendSynced = true
+      }
+    }
+
+    const newClient = {
+      ...newClientBase,
+      id: newId,
+      isBackendSynced: backendSynced,
+    }
+
+    const targetCaseId = resolveBackendCaseId(newId, activeAy)
 
     // Also create initial blank tax case
     const newCase = {
-      caseId: `CASE-2025-${String(taxCases.length + 1).padStart(3, '0')}`,
+      caseId: targetCaseId,
       clientId: newId,
       clientName: newClient.name,
       pan: newClient.pan,
@@ -240,7 +412,7 @@ export function AppProvider({ children }) {
       pan: newClient.pan,
       assessmentYear: activeAy,
       scope: `${newClient.category} Tax Return Filing & Statutory Verification`,
-      status: 'PENDING',
+      status: backendSynced ? 'ACTIVE' : 'PENDING',
       ipAddress: 'Awaiting Client Digital Signature',
       userAgent: '—',
       timestamp: new Date().toISOString(),
@@ -260,27 +432,28 @@ export function AppProvider({ children }) {
       newClient.pan,
       'Intake'
     )
-    return newId
+    return newClient
   }
 
   // Update client intake questionnaire discovery answers & recalculate checklist
-  const updateClientIntake = (clientId, intakeDiscovery) => {
-    let updatedPan = ''
-    let updatedName = ''
-    let recommendedItr = 'ITR-1 (Sahaj)'
+  const updateClientIntake = async (clientId, intakeDiscovery) => {
+    const target = clients.find((c) => c.id === clientId)
+    const updatedPan = target?.pan || ''
+    const updatedName = target?.name || ''
+    const recommendedItr = target
+      ? computeRecommendedItr(target.legalType || 'INDIVIDUAL', target.occupationProfile, intakeDiscovery)
+      : 'ITR-1 (Sahaj)'
 
     setClients((prev) =>
       prev.map((c) => {
         if (c.id === clientId) {
-          updatedPan = c.pan
-          updatedName = c.name
-          recommendedItr = computeRecommendedItr(c.legalType || 'INDIVIDUAL', c.occupationProfile, intakeDiscovery)
+          const recItr = computeRecommendedItr(c.legalType || 'INDIVIDUAL', c.occupationProfile, intakeDiscovery)
           const newChecklist = generateDynamicChecklist(c, intakeDiscovery)
           const mandatoryCount = newChecklist.filter((item) => item.mandatory && item.status !== 'WAIVED').length
           return {
             ...c,
             intakeDiscovery,
-            itrType: recommendedItr,
+            itrType: recItr,
             dynamicChecklist: newChecklist,
             docsRequired: mandatoryCount,
           }
@@ -315,6 +488,18 @@ export function AppProvider({ children }) {
         return tc
       })
     )
+
+    if (apiClient.getAccessToken() && target && PAN_FORMAT_REGEX.test(String(updatedPan).toUpperCase())) {
+      try {
+        const synced = await ensureClientSynced({ ...target, intakeDiscovery, itrType: recommendedItr })
+        await apiClient.putClientIntake(updatedPan.toUpperCase(), intakeDiscovery)
+        const resolvedCaseId = synced.caseId || resolveBackendCaseId(synced.clientId, target.activeAY || activeAy)
+        const rawItr = await apiClient.getITRSelection(synced.clientId, resolvedCaseId).catch(() => null)
+        if (rawItr) setBackendItrSelection(mapBackendITRSelectionToUi(rawItr))
+      } catch (err) {
+        console.warn('Backend intake discovery sync warning:', err?.message || err)
+      }
+    }
 
     addAuditLog(
       'INTAKE_DISCOVERY_UPDATED',
@@ -356,11 +541,32 @@ export function AppProvider({ children }) {
     addAuditLog('SEED_STATUTORY_DATA', 'Loaded 7 real statutory Indian tax entity demonstration profiles across Section 2(31).')
   }
 
-  const updateClient = (id, updatedFields) => {
+  const updateClient = async (id, updatedFields) => {
+    const existing = clients.find((c) => c.id === id)
+    const mergedClient = existing ? { ...existing, ...updatedFields } : null
+    if (mergedClient?.pan) {
+      mergedClient.pan = String(mergedClient.pan).trim().toUpperCase()
+    }
     setClients((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...updatedFields } : c))
+      prev.map((c) => (c.id === id ? { ...c, ...updatedFields, ...(mergedClient?.pan ? { pan: mergedClient.pan } : {}) } : c))
     )
-    addAuditLog('CLIENT_UPDATED', `Updated profile records for client ID ${id}.`, activeClient?.name, activeClient?.pan, 'Management')
+    if (mergedClient?.pan) {
+      setTaxCases((prev) =>
+        prev.map((tc) =>
+          tc.clientId === id
+            ? { ...tc, clientName: mergedClient.name || tc.clientName, pan: mergedClient.pan }
+            : tc
+        )
+      )
+    }
+    if (apiClient.getAccessToken() && mergedClient && PAN_FORMAT_REGEX.test(mergedClient.pan || '')) {
+      try {
+        await ensureClientSynced(mergedClient, true)
+      } catch (err) {
+        console.warn('Backend client update sync warning:', err?.message || err)
+      }
+    }
+    addAuditLog('CLIENT_UPDATED', `Updated profile records for client ID ${id}.`, mergedClient?.name || activeClient?.name, mergedClient?.pan || activeClient?.pan, 'Management')
   }
 
   // Grant DPDP Consent Action
@@ -1056,19 +1262,28 @@ export function AppProvider({ children }) {
       }
 
       let resolvedActiveId = idRemap[activeClientId] || activeClientId
-      if (!mergedClients.some((c) => c.id === resolvedActiveId)) {
+      let matchedClient = mergedClients.find((c) => c.id === resolvedActiveId)
+
+      if (!matchedClient) {
         resolvedActiveId = backendClients[0]?.id || mergedClients[0]?.id || ''
+        matchedClient = mergedClients.find((c) => c.id === resolvedActiveId)
+      } else if (!matchedClient.isBackendSynced && !PAN_FORMAT_REGEX.test(String(matchedClient.pan || '').toUpperCase())) {
+        // Do not fail workspace sign-in on an un-synced invalid draft PAN (e.g. legacy pre-validation local entry)
+        if (backendClients[0]?.id) {
+          resolvedActiveId = backendClients[0].id
+          matchedClient = mergedClients.find((c) => c.id === resolvedActiveId)
+        }
       }
+
       if (resolvedActiveId && resolvedActiveId !== activeClientId) {
         setActiveClientId(resolvedActiveId)
       }
 
-      if (resolvedActiveId) {
-        const matchedClient = mergedClients.find((c) => c.id === resolvedActiveId)
+      if (resolvedActiveId && matchedClient?.isBackendSynced) {
         const matchedCase = mergedTaxCases.find((tc) => tc.clientId === resolvedActiveId)
         const caseId = matchedCase?.caseId || resolveBackendCaseId(resolvedActiveId, matchedClient?.activeAY)
-        await fetchClientDocumentsFromBackend(resolvedActiveId, caseId)
-        await fetchClientReconciliationAndTax(resolvedActiveId, caseId)
+        await fetchClientDocumentsFromBackend(resolvedActiveId, caseId).catch(() => [])
+        await fetchClientReconciliationAndTax(resolvedActiveId, caseId).catch(() => null)
       }
       return backendClients
     } catch (err) {
@@ -1092,12 +1307,23 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     if (!authSession?.access_token || !activeClientId) return
+    setExtractionError(null)
+    const currentClient = clients.find((c) => c.id === activeClientId)
+    if (!currentClient || !currentClient.isBackendSynced) {
+      setBackendReconciliation(null)
+      setBackendTaxComparison(null)
+      setBackendItrSelection(null)
+      setBackendFilingPackage(null)
+      return
+    }
     const matchedCase = taxCases.find((tc) => tc.clientId === activeClientId)
     const caseId =
       matchedCase?.caseId ||
-      resolveBackendCaseId(activeClientId, activeClient?.activeAY || activeAy)
+      resolveBackendCaseId(activeClientId, currentClient?.activeAY || activeAy)
     fetchClientDocumentsFromBackend(activeClientId, caseId).catch((err) => {
-      setExtractionError(err?.message || 'Unable to load documents from backend.')
+      if (err?.status !== 404) {
+        setExtractionError(err?.message || 'Unable to load documents from backend.')
+      }
     })
     fetchClientReconciliationAndTax(activeClientId, caseId).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1640,6 +1866,7 @@ export function AppProvider({ children }) {
         clearAllClients,
         seedStatutoryTaxpayers,
         updateClient,
+        ensureClientSynced,
         grantConsent,
         documents,
         activeClientDocs,

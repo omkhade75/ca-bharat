@@ -134,6 +134,18 @@ def _compute_and_persist_from_validated_db(
             )
         else:
             chosen = result.new_regime if result.recommended_regime == TaxRegimeEnum.NEW_REGIME_115BAC else result.old_regime
+            preserved_itr = None
+            if existing_comp.itr_selection_json:
+                try:
+                    preserved_itr = json.loads(existing_comp.itr_selection_json)
+                except Exception:
+                    preserved_itr = None
+            preserved_pkg = None
+            if existing_comp.filing_package_json:
+                try:
+                    preserved_pkg = json.loads(existing_comp.filing_package_json)
+                except Exception:
+                    preserved_pkg = None
             repo.save_tax_computation(
                 pan=client_pan,
                 computation_data={
@@ -150,6 +162,9 @@ def _compute_and_persist_from_validated_db(
                     "data_source": "VALIDATED_BACKEND_DOCUMENTS",
                     "validation_status": derived["validation_status"],
                     "validation_gate": derived["validation_gate"],
+                    "selected_itr_form": existing_comp.selected_itr_form or "ITR-1",
+                    "itr_selection": preserved_itr,
+                    "filing_package": preserved_pkg,
                     "details": {
                         "income_summary": derived["income_summary"],
                         "deductions_summary": derived["deductions_summary"],

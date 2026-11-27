@@ -28,19 +28,57 @@ class TaxpayerRepository:
     def get_client_by_pan(self, pan: str) -> Optional[DBClientProfile]:
         return self.db.query(DBClientProfile).filter(DBClientProfile.pan == pan.upper()).first()
 
+    def get_client_by_id(self, client_id: str) -> Optional[DBClientProfile]:
+        return self.db.query(DBClientProfile).filter(DBClientProfile.id == client_id).first()
+
     def create_or_update_client(self, client_data: Dict[str, Any]) -> DBClientProfile:
-        pan = client_data.get("pan", "").upper()
-        existing = self.get_client_by_pan(pan)
+        cleaned = dict(client_data)
+        pan = str(cleaned.get("pan") or "").strip().upper()
+        cleaned["pan"] = pan
+
+        # Normalize optional empty strings & column caps for strict PostgreSQL VARCHAR constraints
+        for opt_pan_key in ("tan", "karta_pan", "responsible_person_pan"):
+            if opt_pan_key in cleaned:
+                val = str(cleaned[opt_pan_key] or "").strip().upper()
+                cleaned[opt_pan_key] = val[:10] if val else None
+
+        cap_map = {
+            "id": 64,
+            "name": 128,
+            "legal_type": 32,
+            "occupation_profile": 32,
+            "residential_status": 32,
+            "dob_or_doi": 32,
+            "category": 128,
+            "tier": 32,
+            "recommended_itr": 64,
+            "email": 128,
+            "mobile": 20,
+            "employer_or_trade_name": 128,
+            "entity_reg_no": 64,
+            "bank_account_no": 32,
+            "bank_ifsc": 16,
+            "bank_name": 64,
+            "status": 32,
+        }
+        for col, max_len in cap_map.items():
+            if col in cleaned and cleaned[col] is not None:
+                val = str(cleaned[col]).strip()
+                cleaned[col] = val[:max_len] if val else ("" if col in ("category", "name") else None)
+
+        existing = self.get_client_by_pan(pan) or (
+            self.get_client_by_id(cleaned["id"]) if cleaned.get("id") else None
+        )
         if existing:
-            for k, v in client_data.items():
-                if hasattr(existing, k) and v is not None:
+            for k, v in cleaned.items():
+                if hasattr(existing, k) and k != "id" and v is not None:
                     setattr(existing, k, v)
             existing.updated_at = datetime.now(timezone.utc)
             self.db.commit()
             self.db.refresh(existing)
             return existing
         else:
-            client = DBClientProfile(**client_data)
+            client = DBClientProfile(**cleaned)
             self.db.add(client)
             self.db.commit()
             self.db.refresh(client)
@@ -698,7 +736,16 @@ class TaxpayerRepository:
         if not comp:
             comp = self.get_tax_computation_by_pan(pan)
         if not comp:
-            return None
+            comp = self.save_tax_computation(
+                pan=pan,
+                computation_data={
+                    "client_id": client_id,
+                    "selected_itr_form": filing_package_data.get("selected_itr_form", "ITR-1 (Sahaj)"),
+                    "filing_package": filing_package_data,
+                    "details": {},
+                },
+            )
+            return comp
         comp.filing_package_json = json.dumps(filing_package_data)
         self.db.commit()
         self.db.refresh(comp)

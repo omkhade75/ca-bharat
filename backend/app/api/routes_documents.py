@@ -708,11 +708,16 @@ def request_missing_documents(
     Generates a draft missing-document request notice for Email & WhatsApp outreach.
     Strictly requires CA role & client/case ownership; does NOT transmit real messages.
     """
-    pan_upper = payload.client_pan.upper()
-    client = case_manager.get_client(pan_upper)
+    client = None
+    if payload.client_id:
+        client = case_manager.get_client_by_id(payload.client_id)
+    if not client and payload.client_pan:
+        client = case_manager.get_client(payload.client_pan.upper())
+
+    pan_upper = (client.pan if client else (payload.client_pan or "")).upper()
     if not client:
-        assert_client_case_access(actor, target_client_id="__NONEXISTENT__", target_case_id=payload.case_id, require_ca_role=True)
-        raise HTTPException(status_code=404, detail=f"Client with PAN {pan_upper} not found.")
+        assert_client_case_access(actor, target_client_id=payload.client_id or "__NONEXISTENT__", target_case_id=payload.case_id, require_ca_role=True)
+        raise HTTPException(status_code=404, detail=f"Client '{payload.client_id or pan_upper}' not found.")
 
     assert_client_case_access(actor, target_client_id=client.id, target_case_id=payload.case_id, require_ca_role=True)
 

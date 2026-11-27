@@ -288,3 +288,145 @@ def test_api_routes_filing_package_and_download():
     assert dl_res.status_code == 200
     assert dl_res.headers["content-type"] == "application/json"
     assert "attachment; filename=" in dl_res.headers["content-disposition"]
+
+
+def test_new_multi_income_client_end_to_end_all_steps():
+    """
+    Tests all 8 statutory stages for a newly onboarded client with MULTI_INCOME_UNSURE:
+    Step 1 Onboard -> DB Reload Hydration -> Step 2 Multi-Income Discovery ->
+    Step 3 & 4 Real Sample PDF Uploads -> Step 5 Reconciliation & Resolution ->
+    Step 6 Rule 12 ITR-3 Auto-Selection & Tax Computation -> Step 7 CA Sign-off ->
+    Step 8 Filing Package JSON without any hardcoded Arun Verma contamination.
+    """
+    import os
+    from app.services.case_manager import case_manager
+
+    ca_headers = authenticate_test_client(client, "ca.partner@cabharat.demo", "DemoPartner!2026")
+    new_client_id = "client-abcpk9918f"
+    new_pan = "ABCPK9918F"
+    case_id = f"case-{new_client_id}-ay2526"
+
+    # Step 1: Onboard brand-new taxpayer with MULTI_INCOME_UNSURE and long recommended_itr string
+    onboard_res = client.post(
+        "/api/clients",
+        headers=ca_headers,
+        json={
+            "id": new_client_id,
+            "pan": new_pan,
+            "name": "Om Khade",
+            "legal_type": "INDIVIDUAL",
+            "occupation_profile": "MULTI_INCOME_UNSURE",
+            "residential_status": "RESIDENT",
+            "category": "Individual - MULTI_INCOME_UNSURE",
+            "recommended_itr": "Auto-Detect via AI Engine (Rule 12)",
+            "email": "om.khade@demo.in",
+            "mobile": "+91 98222 33445",
+        },
+    )
+    assert onboard_res.status_code == 200
+    assert onboard_res.json()["id"] == new_client_id
+    assert onboard_res.json()["occupation_profile"] == "MULTI_INCOME_UNSURE"
+
+    # Step 2: Update Intake Discovery with Business + 2 Rental Houses + Stocks + Father's Company Directorship
+    intake_payload = {
+        "salary": {"hasIncome": "YES", "employers": [{"grossSalary": 1520000, "tdsDeducted": 118560}]},
+        "houseProperty": {
+            "hasIncome": "YES",
+            "properties": [
+                {"propertyType": "LET_OUT", "annualRentReceived": 240000},
+                {"propertyType": "LET_OUT", "annualRentReceived": 180000},
+            ],
+        },
+        "businessProfession": {"hasIncome": "YES", "grossTurnoverOrReceipts": 1800000, "presumptiveElection": "NONE"},
+        "capitalGains": {"hasIncome": "YES", "tradedEquitiesOrMutualFunds": "YES"},
+        "specialDisclosures": {"hasDirectorship": "YES", "hasUnlistedEquityShares": "YES"},
+    }
+    intake_res = client.put(f"/api/clients/{new_pan}/intake", headers=ca_headers, json=intake_payload)
+    assert intake_res.status_code == 200
+
+    # Simulate memory cache clear (e.g. Render worker restart) -> verify full DB hydration works
+    case_manager.clients.pop(new_pan, None)
+    reloaded = case_manager.get_client_by_id(new_client_id)
+    assert reloaded is not None
+    assert reloaded.occupation_profile.value == "MULTI_INCOME_UNSURE"
+    assert reloaded.intake_discovery["specialDisclosures"]["hasDirectorship"] == "YES"
+
+    # Verify Step 6 Rule 12 auto-engine selects ITR-3 BEFORE documents or after documents
+    itr_res = client.get(f"/api/itr/client/{new_client_id}?case_id={case_id}", headers=ca_headers)
+    assert itr_res.status_code == 200
+    assert itr_res.json()["form_code"] == "ITR-3"
+    assert any(i["form"] == "ITR-1" and i["status"] == "Ineligible" for i in itr_res.json()["ineligible_forms"])
+    assert any(i["form"] == "ITR-4" and i["status"] == "Ineligible" for i in itr_res.json()["ineligible_forms"])
+
+    # Step 3 & 4: Upload real sample PDFs from Sample_Tax_Documents_For_Testing
+    sample_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Sample_Tax_Documents_For_Testing"))
+    uploads = [
+        ("FORM_16", "01_Form16_Salary_TCS.pdf"),
+        ("FORM_26AS", "02_Form26AS_TaxCredit_TRACES.pdf"),
+        ("AIS", "03_AIS_TIS_Annual_Statement.pdf"),
+    ]
+    for cat, fname in uploads:
+        fpath = os.path.join(sample_dir, fname)
+        with open(fpath, "rb") as f:
+            up_res = client.post(
+                "/api/documents/upload",
+                headers=ca_headers,
+                data={"client_id": new_client_id, "client_pan": new_pan, "case_id": case_id, "category": cat, "assessment_year": "AY 2025-26"},
+                files={"file": (fname, f.read(), "application/pdf")},
+            )
+            assert up_res.status_code == 200
+            doc_json = up_res.json()
+            assert doc_json["processing_status"] == "PARSED"
+            # Mark doc VERIFIED for Step 7 readiness
+            vr = client.patch(f"/api/documents/{doc_json['id']}/status", headers=ca_headers, json={"ca_review_status": "VERIFIED"})
+            assert vr.status_code == 200
+
+    # Step 5: Run 3-way reconciliation & resolve all unresolved rows
+    recon_res = client.post(f"/api/reconcile/client/{new_client_id}/run", headers=ca_headers, json={"case_id": case_id, "assessment_year": "2025-26"})
+    assert recon_res.status_code == 200
+    recon_matrix = recon_res.json()
+    assert len(recon_matrix["rows"]) >= 2
+
+    for row in recon_matrix["rows"]:
+        if not row["is_resolved"]:
+            res_row = client.patch(
+                f"/api/reconcile/client/{new_client_id}/rows/{row['id']}",
+                headers=ca_headers,
+                json={"action": row.get("recommended_action") or "NO_ACTION", "ca_notes": "Verified against sample tax records", "case_id": case_id},
+            )
+            assert res_row.status_code == 200
+
+    # Step 6: Confirm ITR-3 & Compute Tax (verify confirming ITR-3 survives tax recompute)
+    conf_itr = client.post(
+        f"/api/itr/client/{new_client_id}/confirm",
+        headers=ca_headers,
+        json={"case_id": case_id, "confirmed_form": "ITR-3", "ca_notes": "Confirmed ITR-3 for business, CG, multiple HPs & directorship."},
+    )
+    assert conf_itr.status_code == 200
+
+    calc_res = client.post(f"/api/calculate/client/{new_client_id}/tax", headers=ca_headers, json={"case_id": case_id, "assessment_year": "2025-26"})
+    assert calc_res.status_code == 200
+    calc_data = calc_res.json()
+    assert calc_data["selected_itr_form"] == "ITR-3"
+
+    # Step 7: CA Sign-Off
+    sign_res = client.post(
+        f"/api/calculate/client/{new_client_id}/sign-off",
+        headers=ca_headers,
+        json={"case_id": case_id, "chosen_regime": calc_data["recommended_regime"], "verification_notes": "All schedules audited cleanly."},
+    )
+    assert sign_res.status_code == 200
+    assert sign_res.json()["status"] == "APPROVED"
+
+    # Step 8: Generate Filing Package JSON without any Arun Verma fallback leakage
+    pkg_res = client.get(f"/api/filing/client/{new_client_id}/package?case_id={case_id}", headers=ca_headers)
+    assert pkg_res.status_code == 200
+    pkg = pkg_res.json()
+    assert pkg["client_pan"] == new_pan
+    assert pkg["client_name"] == "Om Khade"
+    assert pkg["selected_itr_form"] == "ITR-3"
+    assert pkg["is_ca_approved"] is True
+    assert "ITR3" in pkg["itr_json_payload"]["ITR"]
+    assert pkg["schedules"]["Verification"]["FatherName"] != "Ramesh Kumar Verma"
+    assert pkg["schedules"]["BankAccountDetails"][0]["account_number"] != "50100294819281"
+    assert pkg["validation_report"]["is_valid"] is True

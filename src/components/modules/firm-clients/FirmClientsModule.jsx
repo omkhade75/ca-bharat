@@ -71,6 +71,8 @@ export default function FirmClientsModule() {
   const [selectedClientForDiscovery, setSelectedClientForDiscovery] = useState(null)
   const [isAddTeamMemberOpen, setIsAddTeamMemberOpen] = useState(false)
   const [copiedConsentId, setCopiedConsentId] = useState(null)
+  const [onboardError, setOnboardError] = useState(null)
+  const [isOnboardingSubmit, setIsOnboardingSubmit] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
 
   useEffect(() => {
@@ -128,71 +130,87 @@ export default function FirmClientsModule() {
     pincode: '400001',
   })
 
-  // Real-time duplicate PAN detection
-  const duplicateClient = Boolean(formData.pan && formData.pan.length === 10)
-    ? clients.find((c) => c.pan?.toUpperCase() === formData.pan?.toUpperCase())
+  // Real-time PAN format & duplicate PAN validation
+  const panUpperInput = String(formData.pan || '').trim().toUpperCase()
+  const isValidPanFormat = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panUpperInput)
+  const duplicateClient = Boolean(panUpperInput && panUpperInput.length === 10)
+    ? clients.find((c) => c.pan?.toUpperCase() === panUpperInput)
     : null
   const isDuplicatePan = Boolean(duplicateClient)
 
   // Filter clients
   const filteredClients = clients.filter((c) => {
     const matchesSearch =
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.pan.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.phone.includes(searchQuery)
+      (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.pan || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.phone || '').includes(searchQuery)
     const matchesCategory =
-      categoryFilter === 'ALL' || c.category.toLowerCase().includes(categoryFilter.toLowerCase())
+      categoryFilter === 'ALL' || (c.category || '').toLowerCase().includes(categoryFilter.toLowerCase())
     const matchesTier = tierFilter === 'ALL' || c.tier === tierFilter
     return matchesSearch && matchesCategory && matchesTier
   })
 
-  const handleCreateClient = (e) => {
+  const handleCreateClient = async (e) => {
     e.preventDefault()
-    if (!formData.name || !formData.pan) {
-      alert('Please provide client name and PAN.')
+    setOnboardError(null)
+    if (!formData.name.trim() || !panUpperInput) {
+      setOnboardError('Please provide both Taxpayer Full Legal Name and 10-character PAN.')
+      return
+    }
+    if (!isValidPanFormat) {
+      setOnboardError(
+        `Invalid PAN "${panUpperInput}". Indian PAN must be 10 characters: 5 letters + 4 digits + 1 letter (e.g. ABCPA1092F).`
+      )
       return
     }
     if (isDuplicatePan) {
-      alert(`Client with PAN ${formData.pan} is already registered as "${duplicateClient?.name}". Duplicate intake prevented.`)
+      setOnboardError(`Client with PAN ${panUpperInput} is already registered as "${duplicateClient?.name}". Duplicate intake prevented.`)
       return
     }
-    const newId = addClient(formData)
-    setIsAddClientOpen(false)
-    setFormData({
-      name: '',
-      pan: '',
-      legalType: 'INDIVIDUAL',
-      occupationProfile: 'SALARIED',
-      residentialStatus: 'RESIDENT',
-      dobOrDoi: '',
-      isExistingClient: false,
-      requestedService: 'REGULAR_ITR',
-      assignedPartner: 'CA Rajesh Sharma (Partner)',
-      assignedStaff: 'Ananya Joshi (Senior Associate)',
-      email: '',
-      phone: '',
-      tier: 'Gold',
-      employer: '',
-      tan: '',
-      kartaName: '',
-      kartaPan: '',
-      hufDeedDate: '',
-      entityRegNo: '',
-      registeredOffice: '',
-      responsiblePersonName: '',
-      responsiblePersonPan: '',
-      responsiblePersonDesignation: 'Managing Partner',
-      address: '',
-      city: 'Mumbai',
-      state: 'Maharashtra',
-      pincode: '400001',
-    })
-    const newlyCreated = clients.find((c) => c.id === newId) || { id: newId, ...formData }
-    setSelectedClientForView(newlyCreated)
-    // Prompt CA to proceed directly into Step 1 Tax Discovery
-    setSelectedClientForDiscovery(newlyCreated)
-    setIsTaxDiscoveryOpen(true)
+    setIsOnboardingSubmit(true)
+    try {
+      const newlyCreated = await addClient({ ...formData, pan: panUpperInput, name: formData.name.trim() })
+      setIsAddClientOpen(false)
+      setOnboardError(null)
+      setFormData({
+        name: '',
+        pan: '',
+        legalType: 'INDIVIDUAL',
+        occupationProfile: 'SALARIED',
+        residentialStatus: 'RESIDENT',
+        dobOrDoi: '',
+        isExistingClient: false,
+        requestedService: 'REGULAR_ITR',
+        assignedPartner: 'CA Rajesh Sharma (Partner)',
+        assignedStaff: 'Ananya Joshi (Senior Associate)',
+        email: '',
+        phone: '',
+        tier: 'Gold',
+        employer: '',
+        tan: '',
+        kartaName: '',
+        kartaPan: '',
+        hufDeedDate: '',
+        entityRegNo: '',
+        registeredOffice: '',
+        responsiblePersonName: '',
+        responsiblePersonPan: '',
+        responsiblePersonDesignation: 'Managing Partner',
+        address: '',
+        city: 'Mumbai',
+        state: 'Maharashtra',
+        pincode: '400001',
+      })
+      setSelectedClientForView(newlyCreated)
+      // Prompt CA to proceed directly into Step 2 Tax Discovery
+      setSelectedClientForDiscovery(newlyCreated)
+      setIsTaxDiscoveryOpen(true)
+    } catch (err) {
+      setOnboardError(err?.message || 'Unable to onboard taxpayer with backend API.')
+    } finally {
+      setIsOnboardingSubmit(false)
+    }
   }
 
   const openClientDrawer = (client) => {
@@ -216,12 +234,18 @@ export default function FirmClientsModule() {
     setIsEditClientOpen(true)
   }
 
-  const handleUpdateClient = (e) => {
+  const handleUpdateClient = async (e) => {
     e.preventDefault()
-    updateClient(editFormData.id, editFormData)
+    const cleanPan = String(editFormData.pan || '').trim().toUpperCase()
+    if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(cleanPan)) {
+      alert(`Invalid PAN "${cleanPan}". Indian PAN must be 10 characters: 5 letters, 4 digits, 1 letter (e.g. ABCPA1092F).`)
+      return
+    }
+    const updatedPayload = { ...editFormData, pan: cleanPan }
+    await updateClient(editFormData.id, updatedPayload)
     setIsEditClientOpen(false)
     if (selectedClientForView && selectedClientForView.id === editFormData.id) {
-      setSelectedClientForView({ ...selectedClientForView, ...editFormData })
+      setSelectedClientForView({ ...selectedClientForView, ...updatedPayload })
     }
   }
 
@@ -868,6 +892,14 @@ export default function FirmClientsModule() {
         maxWidth="max-w-2xl"
       >
         <form onSubmit={handleCreateClient} className="space-y-4 text-xs">
+          {/* Validation / Backend Error Banner */}
+          {onboardError && (
+            <div role="alert" className="bg-rose-50 border border-rose-300 rounded-xl p-3 text-rose-900 flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="text-[11px] text-rose-800 font-medium leading-relaxed">{onboardError}</div>
+            </div>
+          )}
+
           {/* Real-Time Duplicate PAN Alert Banner */}
           {isDuplicatePan && (
             <div className="bg-rose-50 border border-rose-300 rounded-xl p-3 text-rose-900 flex items-start gap-2.5 animate-shake">
@@ -890,7 +922,10 @@ export default function FirmClientsModule() {
                 required
                 placeholder="e.g. Ramesh K. Narayanan"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) => {
+                  setOnboardError(null)
+                  setFormData({ ...formData, name: e.target.value })
+                }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-rose-500"
               />
             </div>
@@ -902,11 +937,21 @@ export default function FirmClientsModule() {
                 maxLength={10}
                 placeholder="e.g. ABCPK9918F"
                 value={formData.pan}
-                onChange={(e) => setFormData({ ...formData, pan: e.target.value.toUpperCase() })}
+                onChange={(e) => {
+                  setOnboardError(null)
+                  setFormData({ ...formData, pan: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })
+                }}
                 className={`w-full uppercase font-mono bg-slate-50 border rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-hidden focus:ring-1 ${
-                  isDuplicatePan ? 'border-rose-400 focus:ring-rose-500 bg-rose-50/30' : 'border-slate-200 focus:ring-rose-500'
+                  isDuplicatePan || (panUpperInput.length > 0 && !isValidPanFormat)
+                    ? 'border-rose-400 focus:ring-rose-500 bg-rose-50/30'
+                    : 'border-slate-200 focus:ring-rose-500'
                 }`}
               />
+              {panUpperInput.length > 0 && !isValidPanFormat && (
+                <p className="text-[10px] text-rose-600 mt-1 font-medium">
+                  Format: 5 letters, 4 digits, 1 letter (e.g. ABCPA1092F)
+                </p>
+              )}
             </div>
           </div>
 
@@ -1180,11 +1225,11 @@ export default function FirmClientsModule() {
               </button>
               <button
                 type="submit"
-                disabled={isDuplicatePan}
+                disabled={isDuplicatePan || isOnboardingSubmit}
                 className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-semibold shadow-xs transition-all active:scale-98 cursor-pointer flex items-center gap-1.5"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Onboard & Open Discovery</span>
+                <span>{isOnboardingSubmit ? 'Saving Taxpayer...' : 'Onboard & Open Discovery'}</span>
               </button>
             </div>
           </div>

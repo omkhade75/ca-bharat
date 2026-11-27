@@ -61,32 +61,58 @@ def _build_evaluation_inputs(db: Session, client, case_id: Optional[str] = None)
     inc = derived["income"]
     intake = getattr(client, "intake_discovery", {}) or {}
     disclosures = intake.get("specialDisclosures", {}) or {}
+    hp_info = intake.get("houseProperty", {}) or {}
+    bp_info = intake.get("businessProfession", {}) or {}
+    cg_info = intake.get("capitalGains", {}) or {}
+
+    hp_count_from_intake = (
+        len(hp_info.get("properties") or [])
+        if hp_info.get("hasIncome") == "YES"
+        else 0
+    )
+    effective_hp_count = max(hp_count_from_intake, 1 if inc.income_house_property != 0 else 0)
+
+    has_business_intake = bp_info.get("hasIncome") == "YES"
+    bp_turnover = float(bp_info.get("grossTurnoverOrReceipts", 0.0) or 0.0)
+    has_cg_intake = cg_info.get("hasIncome") == "YES"
 
     incomes_dict = {
         "salary": inc.income_salaries,
         "house_property": inc.income_house_property,
-        "house_property_count": 1 if inc.income_house_property != 0 else 0,
+        "house_property_count": effective_hp_count,
         "business_profession": inc.income_pgbp,
-        "has_business_profession": inc.income_pgbp > 0 or inc.is_presumptive_44ada,
-        "presumptive_election": "44ADA" if inc.is_presumptive_44ada else intake.get("businessProfession", {}).get("presumptiveElection"),
-        "professional_receipts": inc.gross_professional_receipts,
+        "has_business_profession": inc.income_pgbp > 0 or inc.is_presumptive_44ada or has_business_intake,
+        "presumptive_election": "44ADA" if inc.is_presumptive_44ada else bp_info.get("presumptiveElection"),
+        "turnover": bp_turnover,
+        "professional_receipts": inc.gross_professional_receipts or bp_turnover,
         "capital_gains_stcg": inc.stcg_111a + inc.stcg_slab,
         "capital_gains_ltcg": inc.ltcg_112a + inc.ltcg_112,
         "capital_gains": inc.total_capital_gains,
-        "has_capital_gains": inc.total_capital_gains > 0,
+        "has_capital_gains": inc.total_capital_gains > 0 or has_cg_intake,
         "other_sources": inc.total_other_sources,
         "savings_interest": inc.savings_interest,
         "dividend_income": inc.dividend_income,
-        "agricultural_income": float(intake.get("otherSources", {}).get("agriculturalIncome", 0.0) or 0.0),
+        "agricultural_income": float(
+            disclosures.get("agriculturalIncomeAmount")
+            or intake.get("otherSources", {}).get("agriculturalIncome")
+            or 0.0
+        ),
     }
 
+    has_unlisted = (
+        disclosures.get("holdsUnlistedShares") == "YES"
+        or disclosures.get("hasUnlistedEquityShares") == "YES"
+    )
     disclosures_dict = {
         "is_director_in_company": disclosures.get("hasDirectorship") == "YES",
-        "holds_unlisted_equity": disclosures.get("holdsUnlistedShares") == "YES",
+        "holds_unlisted_equity": has_unlisted,
         "has_foreign_assets_or_income": disclosures.get("hasForeignAssetsOrIncome") == "YES",
         "has_crypto_or_vda": disclosures.get("hasCryptoOrVDA") == "YES",
         "confirmed_no_directorship": disclosures.get("hasDirectorship") == "NO",
-        "confirmed_no_unlisted_equity": disclosures.get("holdsUnlistedShares") == "NO",
+        "confirmed_no_unlisted_equity": (
+            disclosures.get("holdsUnlistedShares") == "NO"
+            or disclosures.get("hasUnlistedEquityShares") == "NO"
+        ),
         "confirmed_no_foreign_assets": disclosures.get("hasForeignAssetsOrIncome") == "NO",
     }
 

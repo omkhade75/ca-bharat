@@ -179,6 +179,15 @@ def _run_migrations(engine):
                         conn.execute(text(f"ALTER TABLE taxpayer_profiles ADD COLUMN {col_name} {col_type}"))
                     except Exception as e:
                         print(f"Migration note for taxpayer_profiles.{col_name}: {e}")
+            if engine.dialect.name == "postgresql":
+                for widen_stmt in (
+                    "ALTER TABLE taxpayer_profiles ALTER COLUMN recommended_itr TYPE VARCHAR(64)",
+                    "ALTER TABLE tax_computations ALTER COLUMN selected_itr_form TYPE VARCHAR(64)",
+                ):
+                    try:
+                        conn.execute(text(widen_stmt))
+                    except Exception as e:
+                        print(f"Migration column widen note: {e}")
 
 def _backup_database_if_sqlite():
     """Takes a pre-migration timestamped backup copy of SQLite database file if it exists."""

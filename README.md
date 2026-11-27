@@ -53,8 +53,13 @@ flowchart LR
 - For complex assessees (e.g. salary + stock trading + multiple rental houses + directorship in father's private company), the system automatically disqualifies ITR-1, ITR-2, and ITR-4 under Rule 12 and recommends **ITR-3** with full statutory legal citations.
 
 ### B. 1-Click "Upload Docs" In Front of Every Customer
-- An intuitive **Upload Docs** button is now positioned directly on each client row in the **Customer Directory** (`Firm & Clients`) and on every card inside the **Existing Customers** popup.
-- Clicking this immediately selects that taxpayer and opens their document vault without navigating through unrelated menus.
+- An intuitive **Upload Docs** button is positioned directly on each client row in the **Customer Directory** (`Firm & Clients`) and on every card inside the **Existing Customers** popup.
+- Clicking this immediately activates that taxpayer and opens their document vault without navigating through unrelated menus.
+
+### C. Full Backend Persistence & PAN Validation for Newly Added Taxpayers
+- **Real-Time PostgreSQL Synchronization:** Newly onboarded taxpayers and Step 2 Discovery questionnaire answers immediately persist via `POST /api/clients` and `PUT /api/clients/{pan}/intake` (with automatic pre-upload sync recovery for draft local entries), preventing `Client not found` / ownership mismatch errors during PDF uploads.
+- **Strict 10-Character PAN Validation:** Enforces statutory `[5 Letters][4 Digits][1 Letter]` validation cleanly during onboarding and profile edits.
+- **Multi-Source End-to-End Parity:** Verified full 8-stage pipeline from new multi-income client onboarding (`MULTI_INCOME_UNSURE` -> Rule 12 `ITR-3` selection) to document extraction, reconciliation, tax calculation, CA sign-off, and filing JSON export with zero hardcoded taxpayer leakage.
 
 ---
 
@@ -78,9 +83,9 @@ Pre-configured sample PDFs for **AY 2025-26** testing are located in the reposit
 
 | File Name | Document Type | Data Contained |
 |---|---|---|
-| `01_Form16_Salary_TCS.pdf` | Form 16 Part A & B | Gross Salary ₹14,50,000, Std Deduction ₹75,000, 80C ₹1,50,000, TDS ₹1,28,450 |
-| `02_Form26AS_TaxCredit_TRACES.pdf` | TRACES Statement | Verified TDS Tax Credit of ₹1,28,450 u/s 192 from TCS Ltd |
-| `03_AIS_TIS_Annual_Statement.pdf` | AIS / TIS Summary | Salary TDS Credit ₹1,28,450 + Savings Bank Interest ₹18,450 |
+| `01_Form16_Salary_TCS.pdf` | Form 16 Part A & B | Gross Salary ₹15,20,000, Std Deduction ₹75,000, TDS ₹1,18,560 |
+| `02_Form26AS_TaxCredit_TRACES.pdf` | TRACES Statement | Verified TDS Tax Credit of ₹1,23,180 across salary & bank interest |
+| `03_AIS_TIS_Annual_Statement.pdf` | AIS / TIS Summary | Salary ₹14,85,000 + Savings Interest ₹18,400 + Dividends ₹24,500 + Mutual Funds ₹1,85,000 |
 
 ---
 
@@ -123,16 +128,16 @@ Pre-configured sample PDFs for **AY 2025-26** testing are located in the reposit
 npm run build
 npx vitest run
 ```
-- **Tests Passed:** 15 / 15 across 4 suites
-- **Build Status:** Clean production bundle (~393ms compile time)
+- **Tests Passed:** 16 / 16 across 5 suites
+- **Build Status:** Clean production bundle (~342ms compile time)
 
 ### Backend Verification
 ```powershell
 $env:PYTHONPATH="backend"
 python -m pytest backend/tests -v
 ```
-- **Tests Passed:** 58 / 58 across 8 suites
-- **Coverage:** Auth, client intake, document extraction, 3-way reconciliation, Rule 12 ITR selection, tax computation, CA approval, and filing package generation.
+- **Tests Passed:** 59 / 59 across 8 suites
+- **Coverage:** Auth, PAN validation, real-time onboarding sync, intake discovery, document extraction, 3-way reconciliation, Rule 12 ITR selection, tax computation, CA approval, and filing package generation.
 
 ---
 
@@ -140,8 +145,8 @@ python -m pytest backend/tests -v
 
 ```powershell
 # 1. Clone the repository
-git clone https://github.com/om13042004/ca-bharat-ai.git
-cd "ca Bharat"
+git clone https://github.com/omkhade75/ca-bharat.git
+cd ca-bharat
 
 # 2. Frontend setup
 npm install

@@ -19,16 +19,21 @@ class CBDTJsonGenerator:
         f26as_data: Dict[str, Any],
         assessment_year: str = "2025-26",
     ) -> Dict[str, Any]:
-        """Generates CBDT-compliant ITR-1 (Sahaj) JSON for salaried individuals."""
-        pan = client.get("pan", "ABCPA1092F")
-        name_parts = client.get("name", "Arun Kumar Verma").split(" ")
-        first_name = name_parts[0]
+        """Generates CBDT-compliant ITR JSON from validated client and computation data."""
+        pan = client.get("pan", "")
+        full_name = str(client.get("name") or "Taxpayer").strip() or "Taxpayer"
+        name_parts = [p for p in full_name.split(" ") if p]
+        first_name = name_parts[0] if name_parts else "Taxpayer"
         last_name = name_parts[-1] if len(name_parts) > 1 else first_name
         middle_name = " ".join(name_parts[1:-1]) if len(name_parts) > 2 else ""
 
-        part_b = f16_data.get("part_b", {})
-        new_reg = tax_computation.get("new_regime", {})
+        part_b = (f16_data or {}).get("part_b", {})
+        new_reg = (tax_computation or {}).get("new_regime", {})
         bank = client.get("bank_details") or {}
+
+        gross_sal = part_b.get("gross_salary")
+        if gross_sal is None:
+            gross_sal = new_reg.get("gross_total_income", 0.0)
 
         return {
             "ITR": {
@@ -37,11 +42,11 @@ class CBDTJsonGenerator:
                         "SWVersionNo": "1.0",
                         "SWCreatedBy": "CA Bharat AI Enterprise (Sharma & Co. DEMO012984N)",
                         "JSONCreatedDate": datetime.now().strftime("%Y-%m-%d"),
-                        "JSONCreatedBy": "CA Rajesh Sharma (FCA #DEMO049281)",
+                        "JSONCreatedBy": (tax_computation or {}).get("ca_approver") or "CA Rajesh Sharma (FCA #DEMO049281)",
                     },
                     "Form_ITR1": {
-                        "FormName": "ITR-1",
-                        "Description": "For individuals being a resident (other than not ordinarily resident) having total income upto Rs.50 lakh",
+                        "FormName": (tax_computation or {}).get("selected_itr_form", "ITR-1"),
+                        "Description": "Deterministic statutory return JSON generated from verified backend documents.",
                         "AssessmentYear": assessment_year,
                         "SchemaVer": "Ver1.0",
                         "FormVer": "Ver1.0",
@@ -54,67 +59,67 @@ class CBDTJsonGenerator:
                         },
                         "PAN": pan,
                         "Address": {
-                            "ResidenceNo": "Flat 402, Highgrove Heights",
-                            "RoadOrStreet": "MG Road",
-                            "CityOrTownOrDistrict": "Bengaluru",
-                            "StateCode": "29",  # Karnataka
+                            "ResidenceNo": "On Record",
+                            "RoadOrStreet": "—",
+                            "CityOrTownOrDistrict": "India",
+                            "StateCode": "29",
                             "CountryCode": "91",
                             "PinCode": 560001,
                             "Phone": {
-                                "MobileNo": 9820012345,
-                                "EmailAddress": client.get("email", "arun.verma@demo.in"),
+                                "MobileNo": client.get("mobile") or "",
+                                "EmailAddress": client.get("email") or "",
                             },
                         },
-                        "DOB": "1988-08-14",
-                        "EmployerCategory": "OTH",  # Others (Private Sector)
+                        "DOB": client.get("dob_or_doi") or "",
+                        "EmployerCategory": "OTH",
                     },
                     "FilingStatus": {
-                        "ReturnFileSec": 11,  # Section 139(1) - On or before due date
-                        "OptOutNewTaxRegime": "N",  # New Tax Regime Default
-                        "ResidentialStatus": "RES",
+                        "ReturnFileSec": 11,
+                        "OptOutNewTaxRegime": "N" if "NEW" in str((tax_computation or {}).get("recommended_regime", "NEW")).upper() else "Y",
+                        "ResidentialStatus": client.get("residential_status", "RESIDENT"),
                     },
                     "IncomeDeductions": {
-                        "GrossSalary": round(part_b.get("gross_salary", 1520000.0)),
-                        "Salaries": round(part_b.get("salary_us_17_1", 1485000.0)),
+                        "GrossSalary": round(float(gross_sal or 0.0)),
+                        "Salaries": round(float(part_b.get("salary_us_17_1") or gross_sal or 0.0)),
                         "AlwnsNotExempt": 0,
-                        "PerquisitesValue": round(part_b.get("perquisites_us_17_2", 35000.0)),
-                        "ProfitsInLieuOfSalary": round(part_b.get("profits_in_lieu_us_17_3", 0.0)),
-                        "DeductionUs16": round(part_b.get("total_deductions_us_16", 75000.0)),
-                        "DeductionUs16ia": round(part_b.get("standard_deduction_us_16ia", 75000.0)),
+                        "PerquisitesValue": round(float(part_b.get("perquisites_us_17_2") or 0.0)),
+                        "ProfitsInLieuOfSalary": round(float(part_b.get("profits_in_lieu_us_17_3") or 0.0)),
+                        "DeductionUs16": round(float(part_b.get("total_deductions_us_16") or new_reg.get("total_deductions") or 0.0)),
+                        "DeductionUs16ia": round(float(part_b.get("standard_deduction_us_16ia") or new_reg.get("total_deductions") or 0.0)),
                         "EntertainmentAlw16ii": 0,
-                        "ProfessionalTaxUs16iii": round(part_b.get("professional_tax_us_16iii", 2400.0)),
-                        "IncomeFromSalaries": round(new_reg.get("gross_total_income", 1445000.0)),
-                        "TotalIncome": round(new_reg.get("total_taxable_income", 1445000.0)),
+                        "ProfessionalTaxUs16iii": round(float(part_b.get("professional_tax_us_16iii") or 0.0)),
+                        "IncomeFromSalaries": round(float(new_reg.get("total_taxable_income") or 0.0)),
+                        "TotalIncome": round(float(new_reg.get("total_taxable_income") or 0.0)),
                     },
                     "TaxComputation": {
-                        "TotalTaxPayable": round(new_reg.get("basic_tax", 139000.0)),
-                        "Rebate87A": round(new_reg.get("rebate_87a", 0.0)),
-                        "TaxPayableOnRebate": round(new_reg.get("tax_after_rebate", 139000.0)),
-                        "EducationCess": round(new_reg.get("health_and_education_cess", 5560.0)),
-                        "GrossTaxLiability": round(new_reg.get("total_tax_liability", 144560.0)),
-                        "TotalTaxesPaid": round(new_reg.get("total_prepaid_tax", 118560.0)),
-                        "BalTaxPayable": round(new_reg.get("tax_due_amount", 26000.0)),
-                        "RefundDue": round(new_reg.get("refund_amount", 0.0)),
+                        "TotalTaxPayable": round(float(new_reg.get("basic_tax") or 0.0)),
+                        "Rebate87A": round(float(new_reg.get("rebate_87a") or 0.0)),
+                        "TaxPayableOnRebate": round(float(new_reg.get("tax_after_rebate") or 0.0)),
+                        "EducationCess": round(float(new_reg.get("health_and_education_cess") or 0.0)),
+                        "GrossTaxLiability": round(float(new_reg.get("total_tax_liability") or 0.0)),
+                        "TotalTaxesPaid": round(float(new_reg.get("total_prepaid_tax") or 0.0)),
+                        "BalTaxPayable": round(float(new_reg.get("tax_due_amount") or 0.0)),
+                        "RefundDue": round(float(new_reg.get("refund_amount") or 0.0)),
                     },
                     "BankAccountDtls": {
                         "AddtnlBankDetails": [
                             {
-                                "BankName": bank.get("bank_name", "HDFC Bank Ltd"),
-                                "IFSCCode": bank.get("ifsc_code", "HDFC0000060"),
-                                "BankAccountNo": bank.get("account_number", "50100294819281"),
-                                "AccountType": "SAV",
+                                "BankName": bank.get("bank_name", "Pending Client Bank Mandate"),
+                                "IFSCCode": bank.get("ifsc_code", "SBIN0000001"),
+                                "BankAccountNo": bank.get("account_number", "PENDING_MANDATE"),
+                                "AccountType": bank.get("account_type", "SAVINGS"),
                                 "RefundFlag": "YES",
                             }
                         ]
                     },
                     "Verification": {
                         "Declaration": {
-                            "AssesseeVerName": client.get("name", "Arun Kumar Verma"),
-                            "FatherName": "Ramesh Kumar Verma",
+                            "AssesseeVerName": full_name,
+                            "FatherName": client.get("karta_name") or "Per PAN Database Record",
                             "AssesseeVerPAN": pan,
-                            "Capacity": "S",  # Self
+                            "Capacity": "S",
                         },
-                        "Place": "Bengaluru",
+                        "Place": "India",
                         "Date": datetime.now().strftime("%Y-%m-%d"),
                         "CA_FCA_RegNo": "DEMO049281",
                         "CA_FirmFRN": "DEMO012984N",

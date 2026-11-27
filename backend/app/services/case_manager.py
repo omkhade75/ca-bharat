@@ -3,6 +3,7 @@ Case Manager & In-Memory Case Store for CA Bharat AI Enterprise Backend
 Coordinates client records, extracted documents, 3-way reconciliation matrices, and CA approvals.
 """
 
+import json
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from ..models.client_models import (
@@ -10,6 +11,7 @@ from ..models.client_models import (
     TaxpayerCategoryEnum,
     LegalTaxpayerTypeEnum,
     IndividualOccupationEnum,
+    ResidentialStatusEnum,
     DPDPConsentRecord,
     BankAccountDetails,
 )
@@ -215,6 +217,83 @@ class CaseManager:
         )
         self.reconciliations[radhika.pan] = recon_radhika
 
+    def _db_client_to_profile(self, db_client: Any) -> ClientProfile:
+        """Converts SQLAlchemy DBClientProfile row back into a full Pydantic ClientProfile."""
+        legal_val = LegalTaxpayerTypeEnum.INDIVIDUAL
+        raw_legal = getattr(db_client, "legal_type", None)
+        if raw_legal:
+            try:
+                legal_val = LegalTaxpayerTypeEnum(str(raw_legal).upper())
+            except ValueError:
+                legal_val = LegalTaxpayerTypeEnum.INDIVIDUAL
+
+        occ_val: Optional[IndividualOccupationEnum] = None
+        raw_occ = getattr(db_client, "occupation_profile", None)
+        if raw_occ:
+            try:
+                occ_val = IndividualOccupationEnum(str(raw_occ).upper())
+            except ValueError:
+                occ_val = IndividualOccupationEnum.OTHER
+        elif legal_val == LegalTaxpayerTypeEnum.INDIVIDUAL:
+            occ_val = IndividualOccupationEnum.SALARIED
+
+        res_val = ResidentialStatusEnum.RESIDENT
+        raw_res = getattr(db_client, "residential_status", None)
+        if raw_res:
+            try:
+                res_val = ResidentialStatusEnum(str(raw_res).upper())
+            except ValueError:
+                res_val = ResidentialStatusEnum.RESIDENT
+
+        intake_dict: Optional[Dict[str, Any]] = None
+        raw_disc = getattr(db_client, "discovery_json", None)
+        if raw_disc:
+            try:
+                parsed = json.loads(raw_disc)
+                if isinstance(parsed, dict):
+                    intake_dict = parsed
+            except Exception:
+                pass
+
+        bank_obj = None
+        if getattr(db_client, "bank_account_no", None) and getattr(db_client, "bank_ifsc", None):
+            bank_obj = BankAccountDetails(
+                account_number=db_client.bank_account_no,
+                ifsc_code=db_client.bank_ifsc,
+                bank_name=db_client.bank_name or "Primary Bank Account",
+            )
+
+        rec_itr = getattr(db_client, "recommended_itr", None) or "ITR-1"
+        return ClientProfile(
+            id=db_client.id,
+            pan=db_client.pan,
+            name=db_client.name,
+            legal_type=legal_val,
+            occupation_profile=occ_val,
+            residential_status=res_val,
+            category=getattr(db_client, "category", None) or "Individual - Salaried",
+            recommended_itr=rec_itr,
+            selected_itr_form=rec_itr,
+            itr_form_type=rec_itr,
+            dob_or_doi=getattr(db_client, "dob_or_doi", None),
+            email=getattr(db_client, "email", None),
+            mobile=getattr(db_client, "mobile", None),
+            employer_or_trade_name=getattr(db_client, "employer_or_trade_name", None),
+            tan=getattr(db_client, "tan", None),
+            karta_name=getattr(db_client, "karta_name", None),
+            karta_pan=getattr(db_client, "karta_pan", None),
+            huf_deed_date=getattr(db_client, "huf_deed_date", None),
+            entity_reg_no=getattr(db_client, "entity_reg_no", None),
+            registered_office_address=getattr(db_client, "registered_office_address", None),
+            responsible_person_name=getattr(db_client, "responsible_person_name", None),
+            responsible_person_pan=getattr(db_client, "responsible_person_pan", None),
+            responsible_person_designation=getattr(db_client, "responsible_person_designation", None),
+            intake_discovery=intake_dict,
+            bank_details=bank_obj,
+            advisory_tier=getattr(db_client, "tier", None) or "Silver",
+            workflow_status=getattr(db_client, "status", None) or "Onboarding",
+        )
+
     def get_client(self, pan: str) -> Optional[ClientProfile]:
         pan_upper = pan.upper()
         if pan_upper in self.clients:
@@ -228,24 +307,7 @@ class CaseManager:
                 repo = TaxpayerRepository(db)
                 db_client = repo.get_client_by_pan(pan_upper)
                 if db_client:
-                    cat_val = TaxpayerCategoryEnum.INDIVIDUAL_SALARIED
-                    for c in TaxpayerCategoryEnum:
-                        if c.value == db_client.category or c.name == db_client.category:
-                            cat_val = c
-                            break
-                    profile = ClientProfile(
-                        id=db_client.id,
-                        pan=db_client.pan,
-                        name=db_client.name,
-                        category=cat_val,
-                        recommended_itr=db_client.recommended_itr or "ITR-1",
-                        email=db_client.email,
-                        mobile=db_client.mobile,
-                        employer_or_trade_name=db_client.employer_or_trade_name,
-                        tan=db_client.tan,
-                        advisory_tier=db_client.tier or "Silver",
-                        workflow_status=db_client.status or "Onboarding",
-                    )
+                    profile = self._db_client_to_profile(db_client)
                     self.clients[pan_upper] = profile
                     return profile
             finally:
@@ -265,10 +327,11 @@ class CaseManager:
             db = SessionLocal()
             try:
                 repo = TaxpayerRepository(db)
-                all_clients = repo.get_all_clients()
-                for c in all_clients:
-                    if c.id == client_id:
-                        return self.get_client(c.pan)
+                db_client = repo.get_client_by_id(client_id)
+                if db_client:
+                    profile = self._db_client_to_profile(db_client)
+                    self.clients[profile.pan.upper()] = profile
+                    return profile
             finally:
                 db.close()
         except Exception:
@@ -313,25 +376,9 @@ class CaseManager:
                 repo = TaxpayerRepository(db)
                 db_clients = repo.get_all_clients()
                 for c in db_clients:
-                    if c.pan not in self.clients:
-                        cat_val = TaxpayerCategoryEnum.INDIVIDUAL_SALARIED
-                        for e in TaxpayerCategoryEnum:
-                            if e.value == c.category:
-                                cat_val = e
-                                break
-                        self.clients[c.pan] = ClientProfile(
-                            id=c.id,
-                            pan=c.pan,
-                            name=c.name,
-                            category=cat_val,
-                            recommended_itr=c.recommended_itr or "ITR-1",
-                            email=c.email,
-                            mobile=c.mobile,
-                            employer_or_trade_name=c.employer_or_trade_name,
-                            tan=c.tan,
-                            advisory_tier=c.tier or "Silver",
-                            workflow_status=c.status or "Onboarding",
-                        )
+                    pan_u = c.pan.upper()
+                    if pan_u not in self.clients:
+                        self.clients[pan_u] = self._db_client_to_profile(c)
             finally:
                 db.close()
         except Exception:
@@ -339,7 +386,9 @@ class CaseManager:
         return list(self.clients.values())
 
     def add_client(self, client: ClientProfile) -> ClientProfile:
-        self.clients[client.pan] = client
+        pan_upper = client.pan.upper()
+        client.pan = pan_upper
+        self.clients[pan_upper] = client
         # Persist to database
         try:
             from ..db.session import SessionLocal
@@ -347,11 +396,16 @@ class CaseManager:
             db = SessionLocal()
             try:
                 repo = TaxpayerRepository(db)
-                repo.create_or_update_client({
+                occ_val = (
+                    client.occupation_profile.value
+                    if hasattr(client.occupation_profile, "value")
+                    else (str(client.occupation_profile) if client.occupation_profile else None)
+                )
+                db_saved = repo.create_or_update_client({
                     "id": client.id,
-                    "pan": client.pan.upper(),
+                    "pan": pan_upper,
                     "name": client.name,
-                    "category": client.category.value if hasattr(client.category, "value") else str(client.category),
+                    "category": client.category.value if hasattr(client.category, "value") else str(client.category or "Individual - Salaried"),
                     "tier": getattr(client, "advisory_tier", "Silver"),
                     "recommended_itr": client.recommended_itr,
                     "email": client.email,
@@ -363,7 +417,7 @@ class CaseManager:
                     "bank_name": client.bank_details.bank_name if client.bank_details else None,
                     "status": getattr(client, "workflow_status", "Onboarding"),
                     "legal_type": client.legal_type.value if hasattr(client.legal_type, "value") else str(client.legal_type),
-                    "occupation_profile": client.occupation_profile.value if hasattr(client.occupation_profile, "value") else str(client.occupation_profile),
+                    "occupation_profile": occ_val,
                     "residential_status": client.residential_status.value if hasattr(client.residential_status, "value") else str(client.residential_status),
                     "dob_or_doi": client.dob_or_doi,
                     "karta_name": client.karta_name,
@@ -376,10 +430,13 @@ class CaseManager:
                     "responsible_person_designation": client.responsible_person_designation,
                     "discovery_json": json.dumps(client.intake_discovery) if client.intake_discovery else None,
                 })
+                if db_saved and db_saved.id:
+                    client.id = db_saved.id
+                    self.clients[pan_upper] = client
             finally:
                 db.close()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[CaseManager] Warning persisting client {pan_upper}: {e}")
         return client
 
     def update_client_intake(self, pan: str, intake_discovery: Dict[str, Any]) -> Optional[ClientProfile]:
@@ -390,7 +447,6 @@ class CaseManager:
         client.intake_discovery = intake_discovery
         self.clients[pan_upper] = client
         try:
-            import json
             from ..db.session import SessionLocal
             from ..db.repository import TaxpayerRepository
             db = SessionLocal()
@@ -402,8 +458,8 @@ class CaseManager:
                 })
             finally:
                 db.close()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[CaseManager] Warning persisting intake discovery for {pan_upper}: {e}")
         return client
 
     def log_event(self, actor: str, action: str, details: str, pan: str, ip: str = "127.0.0.1"):

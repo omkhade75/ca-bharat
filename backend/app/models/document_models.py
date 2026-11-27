@@ -224,7 +224,8 @@ class DocumentStatusUpdateRequest(BaseModel):
     waive_reason: Optional[str] = None
 
 class MissingDocRequestPayload(BaseModel):
-    client_pan: str
+    client_pan: Optional[str] = None
+    client_id: Optional[str] = None
     case_id: Optional[str] = None
     checklist_item_ids: List[str]
     custom_notes: Optional[str] = None

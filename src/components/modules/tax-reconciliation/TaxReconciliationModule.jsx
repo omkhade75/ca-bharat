@@ -63,6 +63,7 @@ export default function TaxReconciliationModule() {
     downloadClientFilingJson,
     returnClientTaxForCorrection,
     rejectClientTaxComputation,
+    ensureClientSynced,
   } = useApp()
 
   const [activeTab, setActiveTab] = useState('RECONCILIATION') // 'RECONCILIATION', 'ITR_SELECTION', 'OPTIMIZER', 'CA_SIGN_OFF'
@@ -163,8 +164,9 @@ export default function TaxReconciliationModule() {
       return
     }
     try {
+      const synced = ensureClientSynced ? await ensureClientSynced(activeClient) : { clientId: activeClient.id, caseId: resolvedCaseId }
       const ayClean = String(activeAy || '2025-26').replace(/^AY\s*/i, '')
-      await runClientReconciliation(activeClient.id, resolvedCaseId, ayClean)
+      await runClientReconciliation(synced.clientId || activeClient.id, synced.caseId || resolvedCaseId, ayClean)
     } catch {
       // surfaced via reconciliationError
     }
@@ -196,10 +198,21 @@ export default function TaxReconciliationModule() {
 
   const handleViewItrJson = async () => {
     setIsItrJsonOpen(true)
-    if (isAuthenticatedBackend && activeClient?.pan) {
+    if (isAuthenticatedBackend && activeClient?.id) {
       try {
-        const livePayload = await apiClient.fetchCbdtJson(activeClient.pan)
-        setBackendItrJson(JSON.stringify(livePayload, null, 2))
+        if (backendFilingPackage?.itrJsonPayload) {
+          setBackendItrJson(JSON.stringify(backendFilingPackage.itrJsonPayload, null, 2))
+          return
+        }
+        const pkg = await fetchClientFilingPackage(activeClient.id, resolvedCaseId).catch(() => null)
+        if (pkg?.itrJsonPayload) {
+          setBackendItrJson(JSON.stringify(pkg.itrJsonPayload, null, 2))
+          return
+        }
+        if (activeClient?.pan) {
+          const livePayload = await apiClient.fetchCbdtJson(activeClient.pan)
+          setBackendItrJson(JSON.stringify(livePayload, null, 2))
+        }
       } catch {
         setBackendItrJson(null)
       }
@@ -603,7 +616,7 @@ export default function TaxReconciliationModule() {
         <div>
           <span className="text-[10px] uppercase font-semibold text-slate-400 block">Return Form</span>
           <span className="text-sm font-bold text-blue-300 font-mono">
-            {activeTaxCase?.filingForm || 'ITR-1'}
+            {backendItrSelection?.recommendedForm || activeTaxCase?.filingForm || 'ITR-1'}
           </span>
           <p className="text-[11px] text-slate-400">
             {activeTaxCase?.filingForm === 'ITR-2'
